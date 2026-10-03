@@ -1,7 +1,30 @@
+using System.ComponentModel.DataAnnotations;
+
 namespace FinancasApi.DTOs;
-public record RegisterRequest(string Name, string Email, string Password);
-public record LoginRequest(string Email, string Password);
-public record RefreshRequest(string RefreshToken);
+
+// Senha: 10-72 bytes (limite do BCrypt), com maiúscula, minúscula e número
+public class StrongPasswordAttribute : ValidationAttribute
+{
+    protected override ValidationResult? IsValid(object? value, ValidationContext ctx)
+    {
+        var p = value as string ?? "";
+        if (p.Length < 10 || System.Text.Encoding.UTF8.GetByteCount(p) > 72
+            || !p.Any(char.IsUpper) || !p.Any(char.IsLower) || !p.Any(char.IsDigit))
+            return new ValidationResult("A senha deve ter de 10 a 72 caracteres, com maiúscula, minúscula e número.");
+        return ValidationResult.Success;
+    }
+}
+
+public static class Limits { public const double MaxMoney = 999_999_999.99; }
+
+public record RegisterRequest(
+    [property: Required, StringLength(100, MinimumLength = 2)] string Name,
+    [property: Required, EmailAddress, StringLength(254)] string Email,
+    [property: Required, StrongPassword] string Password);
+public record LoginRequest(
+    [property: Required, StringLength(254)] string Email,
+    [property: Required, StringLength(72)] string Password);
+public record RefreshRequest([property: Required, StringLength(200)] string RefreshToken);
 
 public record AuthResponse(
     string AccessToken,
@@ -12,7 +35,10 @@ public record AuthResponse(
 public record UserDto(int Id, string Name, string Email);
 
 
-public record UpsertBudgetRequest(int Year, int Month, decimal Salary);
+public record UpsertBudgetRequest(
+    [property: Range(2000, 2100)] int Year,
+    [property: Range(1, 12)] int Month,
+    [property: Range(0, Limits.MaxMoney)] decimal Salary);
 
 public record BudgetDto(
     int Id, int Year, int Month, decimal Salary,
@@ -21,19 +47,22 @@ public record BudgetDto(
 
 
 public record CategoryDto(int Id, string Name, string Icon, string Color, bool IsSystem);
-public record CreateCategoryRequest(string Name, string Icon, string Color);
+public record CreateCategoryRequest(
+    [property: Required, StringLength(50, MinimumLength = 1)] string Name,
+    [property: Required, StringLength(16)] string Icon,
+    [property: Required, RegularExpression("^#[0-9a-fA-F]{6}$")] string Color);
 
 
 public record CreateExpenseRequest(
-    string Description,
-    decimal Amount,
+    [property: Required, StringLength(200)] string Description,
+    [property: Range(0.01, Limits.MaxMoney)] decimal Amount,
     DateOnly Date,
     int CategoryId,
     bool IsRecurring = false);
 
 public record UpdateExpenseRequest(
-    string Description,
-    decimal Amount,
+    [property: Required, StringLength(200)] string Description,
+    [property: Range(0.01, Limits.MaxMoney)] decimal Amount,
     DateOnly Date,
     int CategoryId,
     bool IsRecurring);
@@ -48,15 +77,15 @@ public record ExpenseDto(
     DateTime CreatedAt);
 
 
-public record CreateInvestmentRequest(string Name, string Type, decimal Amount, DateOnly Date);
-public record UpdateInvestmentRequest(string Name, string Type, decimal Amount, DateOnly Date);
+public record CreateInvestmentRequest([property: Required, StringLength(100)] string Name, [property: Required, StringLength(50)] string Type, [property: Range(0.01, Limits.MaxMoney)] decimal Amount, DateOnly Date);
+public record UpdateInvestmentRequest([property: Required, StringLength(100)] string Name, [property: Required, StringLength(50)] string Type, [property: Range(0.01, Limits.MaxMoney)] decimal Amount, DateOnly Date);
 
 public record InvestmentDto(int Id, string Name, string Type, decimal Amount, DateOnly Date, DateTime CreatedAt);
 
 
-public record CreateGoalRequest(string Name, string Icon, decimal TargetAmount, DateOnly? Deadline);
-public record UpdateGoalRequest(string Name, string Icon, decimal TargetAmount, DateOnly? Deadline);
-public record AddToGoalRequest(decimal Amount);
+public record CreateGoalRequest([property: Required, StringLength(100)] string Name, [property: Required, StringLength(16)] string Icon, [property: Range(0.01, Limits.MaxMoney)] decimal TargetAmount, DateOnly? Deadline);
+public record UpdateGoalRequest([property: Required, StringLength(100)] string Name, [property: Required, StringLength(16)] string Icon, [property: Range(0.01, Limits.MaxMoney)] decimal TargetAmount, DateOnly? Deadline);
+public record AddToGoalRequest([property: Range(0.01, Limits.MaxMoney)] decimal Amount);
 
 public record GoalDto(
     int Id, string Name, string Icon,

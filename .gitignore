@@ -16,3 +16,8 @@ appsettings.Local.json
 
 # Logs
 *.log*.save
+
+# Backups de configuração
+*.save
+appsettings.*.json
+!appsettings.json

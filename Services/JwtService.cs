@@ -6,7 +6,7 @@ using FinancasApi.Models;
 using Microsoft.IdentityModel.Tokens;
 
 namespace FinancasApi.Services;
-//JWT geração dos tokens 
+//JWT geração dos tokens
 public class JwtService(IConfiguration config)
 {
     private readonly string _secret    = config["JwtSettings:SecretKey"]!;
@@ -33,10 +33,19 @@ public class JwtService(IConfiguration config)
         return (new JwtSecurityTokenHandler().WriteToken(token), exp);
     }
 
-    public RefreshToken GenerateRefreshToken(int userId) => new()
+    // O valor puro só é devolvido ao cliente; no banco fica apenas o hash SHA-256
+    public (RefreshToken entity, string raw) GenerateRefreshToken(int userId)
     {
-        Token     = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64)),
-        ExpiresAt = DateTime.UtcNow.AddDays(_refDays),
-        UserId    = userId
-    };
+        var raw = Convert.ToBase64String(RandomNumberGenerator.GetBytes(64));
+        var entity = new RefreshToken
+        {
+            Token     = Hash(raw),
+            ExpiresAt = DateTime.UtcNow.AddDays(_refDays),
+            UserId    = userId
+        };
+        return (entity, raw);
+    }
+
+    public static string Hash(string raw) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(raw)));
 }

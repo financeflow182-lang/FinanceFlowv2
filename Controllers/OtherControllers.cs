@@ -2,6 +2,7 @@ using FinancasApi.Data;
 using FinancasApi.DTOs;
 using FinancasApi.Models;
 using FinancasApi.Services;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -24,6 +25,9 @@ public class CategoriesController(AppDbContext db) : BaseController
     [HttpPost]
     public async Task<ActionResult<CategoryDto>> Create(CreateCategoryRequest req)
     {
+        if (await db.Categories.CountAsync(c => c.UserId == UserId) >= 100)
+            return BadRequest(new { message = "Limite de categorias atingido." });
+
         var cat = new Category { Name = req.Name, Icon = req.Icon, Color = req.Color, UserId = UserId };
         db.Categories.Add(cat);
         await db.SaveChangesAsync();
@@ -36,12 +40,13 @@ public class CategoriesController(AppDbContext db) : BaseController
 public class InvestmentsController(AppDbContext db) : BaseController
 {
     [HttpGet]
-    public async Task<ActionResult<IEnumerable<InvestmentDto>>> List([FromQuery] int? year, [FromQuery] int? month)
+    public async Task<ActionResult<IEnumerable<InvestmentDto>>> List(
+        [FromQuery, Range(2000, 2100)] int? year, [FromQuery, Range(1, 12)] int? month)
     {
         var q = db.Investments.Where(i => i.UserId == UserId);
         if (year.HasValue) q = q.Where(i => i.Date.Year == year.Value);
         if (month.HasValue) q = q.Where(i => i.Date.Month == month.Value);
-        var list = await q.OrderByDescending(i => i.Date).ToListAsync();
+        var list = await q.OrderByDescending(i => i.Date).Take(1000).ToListAsync();
         return Ok(list.Select(ToDto));
     }
 
@@ -85,13 +90,16 @@ public class GoalsController(AppDbContext db, AlertService alerts) : BaseControl
     [HttpGet]
     public async Task<ActionResult<IEnumerable<GoalDto>>> List()
     {
-        var list = await db.Goals.Where(g => g.UserId == UserId).OrderByDescending(g => g.CreatedAt).ToListAsync();
+        var list = await db.Goals.Where(g => g.UserId == UserId).OrderByDescending(g => g.CreatedAt).Take(200).ToListAsync();
         return Ok(list.Select(ToDto));
     }
 
     [HttpPost]
     public async Task<ActionResult<GoalDto>> Create(CreateGoalRequest req)
     {
+        if (await db.Goals.CountAsync(g => g.UserId == UserId) >= 200)
+            return BadRequest(new { message = "Limite de metas atingido." });
+
         var goal = new Goal { Name = req.Name, Icon = req.Icon, TargetAmount = req.TargetAmount, Deadline = req.Deadline, UserId = UserId };
         db.Goals.Add(goal);
         await db.SaveChangesAsync();
@@ -113,6 +121,8 @@ public class GoalsController(AppDbContext db, AlertService alerts) : BaseControl
     {
         var goal = await db.Goals.FirstOrDefaultAsync(g => g.Id == id && g.UserId == UserId);
         if (goal == null) return NotFound();
+        if (goal.CurrentAmount + req.Amount > (decimal)Limits.MaxMoney)
+            return BadRequest(new { message = "Valor acima do limite permitido." });
         goal.CurrentAmount += req.Amount;
         await db.SaveChangesAsync();
         await alerts.CheckGoalAlerts(UserId, id);
@@ -175,7 +185,8 @@ public class AlertsController(AppDbContext db) : BaseController
 public class DashboardController(AppDbContext db) : BaseController
 {
     [HttpGet("{year}/{month}")]
-    public async Task<ActionResult<DashboardDto>> Get(int year, int month)
+    public async Task<ActionResult<DashboardDto>> Get(
+        [Range(2000, 2100)] int year, [Range(1, 12)] int month)
     {
         // Budget
         var budget = await db.MonthlyBudgets

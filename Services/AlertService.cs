@@ -65,7 +65,7 @@ public class AlertService(AppDbContext db, IConfiguration config)
     public async Task CheckGoalAlerts(int userId, int goalId)
     {
         var goal = await db.Goals.FindAsync(goalId); //
-        if (goal == null) return;
+        if (goal == null || goal.UserId != userId || goal.TargetAmount <= 0) return;
 
         var pct = goal.CurrentAmount / goal.TargetAmount * 100;
 

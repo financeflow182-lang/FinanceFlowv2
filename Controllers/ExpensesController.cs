@@ -2,6 +2,7 @@ using FinancasApi.Data;
 using FinancasApi.DTOs;
 using FinancasApi.Models;
 using FinancasApi.Services;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,7 +14,7 @@ public class ExpensesController(AppDbContext db, AlertService alerts) : BaseCont
 {
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ExpenseDto>>> List(
-        [FromQuery] int? year, [FromQuery] int? month, [FromQuery] int? categoryId)
+        [FromQuery, Range(2000, 2100)] int? year, [FromQuery, Range(1, 12)] int? month, [FromQuery] int? categoryId)
     {
         var q = db.Expenses
             .Include(e => e.Category)
@@ -38,6 +39,7 @@ public class ExpensesController(AppDbContext db, AlertService alerts) : BaseCont
         var list = await q
             .OrderByDescending(e => e.Date)
             .ThenByDescending(e => e.CreatedAt)
+            .Take(1000)
             .ToListAsync();
 
         return Ok(list.Select(e => ToDto(e, year, month)));
@@ -56,7 +58,7 @@ public class ExpensesController(AppDbContext db, AlertService alerts) : BaseCont
     [HttpPost]
     public async Task<ActionResult<ExpenseDto>> Create(CreateExpenseRequest req)
     {
-        if (!await db.Categories.AnyAsync(c => c.Id == req.CategoryId))
+        if (!await CategoryAllowed(req.CategoryId))
             return BadRequest(new { message = "Categoria inválida." });
 
         var expense = new Expense
@@ -88,6 +90,9 @@ public class ExpensesController(AppDbContext db, AlertService alerts) : BaseCont
 
         if (expense == null) return NotFound();
 
+        if (!await CategoryAllowed(req.CategoryId))
+            return BadRequest(new { message = "Categoria inválida." });
+
         expense.Description = req.Description;
         expense.Amount = req.Amount;
         expense.Date = req.Date;
@@ -116,6 +121,10 @@ public class ExpensesController(AppDbContext db, AlertService alerts) : BaseCont
 
         return NoContent();
     }
+
+    // Só categorias do sistema ou do próprio usuário (evita IDOR)
+    private Task<bool> CategoryAllowed(int categoryId) =>
+        db.Categories.AnyAsync(c => c.Id == categoryId && (c.IsSystem || c.UserId == UserId));
 
     private static ExpenseDto ToDto(Expense e, int? year, int? month)
     {

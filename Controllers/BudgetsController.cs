@@ -1,6 +1,7 @@
 using FinancasApi.Data;
 using FinancasApi.DTOs;
 using FinancasApi.Models;
+using System.ComponentModel.DataAnnotations;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -12,7 +13,7 @@ namespace FinancasApi.Controllers;
 public class BudgetsController(AppDbContext db) : BaseController
 {
     [HttpGet("{year}/{month}")]
-    public async Task<ActionResult<BudgetDto>> Get(int year, int month)
+    public async Task<ActionResult<BudgetDto>> Get([Range(2000, 2100)] int year, [Range(1, 12)] int month)
     {
         var budget = await db.MonthlyBudgets
             .FirstOrDefaultAsync(b => b.UserId == UserId && b.Year == year && b.Month == month);

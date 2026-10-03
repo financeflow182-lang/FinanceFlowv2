@@ -16,6 +16,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     protected override void OnModelCreating(ModelBuilder mb)
     {
+        // Refresh tokens: guardados como hash SHA-256 (64 hex), com índice único para busca
+        mb.Entity<RefreshToken>(e => {
+            e.Property(t => t.Token).HasMaxLength(64);
+            e.HasIndex(t => t.Token).IsUnique();
+        });
+
         //usuarios 
         mb.Entity<User>(e => {
             e.HasIndex(u => u.Email).IsUnique();

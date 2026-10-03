@@ -18,4 +18,7 @@ ENV ASPNETCORE_URLS=http://+:8080
 
 EXPOSE 8080
 
+# Executa como usuário não-root
+USER $APP_UID
+
 ENTRYPOINT ["dotnet", "FinancasApi.dll"]
