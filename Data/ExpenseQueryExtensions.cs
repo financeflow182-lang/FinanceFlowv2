@@ -9,7 +9,7 @@ public static class ExpenseQueryExtensions
     {
         var inicio = new DateOnly(year, month, 1);
         var fim = inicio.AddMonths(1).AddDays(-1);
-        return q.Where(e => e.UserId == userId &&
+        return q.Where(e => e.UserId == userId && !e.ExcludeFromBudget &&
             ((e.Date >= inicio && e.Date <= fim) || (e.IsRecurring && e.Date <= fim)));
     }
 }

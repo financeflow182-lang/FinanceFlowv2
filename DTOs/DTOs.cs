@@ -105,7 +105,9 @@ public record ExpenseDto(
     int? CreditCardId = null,
     int? InstallmentNumber = null,
     int? InstallmentTotal = null,
-    Guid? InstallmentGroupId = null);
+    Guid? InstallmentGroupId = null,
+    bool IsInvoiceBalance = false,
+    bool ExcludeFromBudget = false);
 
 
 public static class CardBrands
@@ -159,6 +161,18 @@ public record CreateCardPurchaseRequest(
     int CategoryId,
     [Range(1, 48, ErrorMessage = "O número de parcelas deve estar entre 1 e 48.")] int Installments = 1,
     bool IsRecurring = false);
+
+public record InvoiceBalanceItem(
+    [Range(2000, 2100, ErrorMessage = "Ano da fatura inválido.")] int Year,
+    [Range(1, 12, ErrorMessage = "Mês da fatura inválido.")] int Month,
+    [Range(0, Limits.MaxMoney, ErrorMessage = "Valor da fatura inválido.")] decimal Amount,
+    bool CountInBudget = false);
+
+// Valor 0 remove o saldo daquele mês
+public record SetInvoiceBalancesRequest(
+    [Required(ErrorMessage = "Informe as faturas."), MinLength(1, ErrorMessage = "Informe ao menos uma fatura."), MaxLength(36, ErrorMessage = "Informe no máximo 36 faturas.")] List<InvoiceBalanceItem> Items);
+
+public record InvoiceBalanceDto(int ExpenseId, int Year, int Month, decimal Amount, bool CountInBudget);
 
 // Status: "open" (ainda não fechou), "closed" (fechada, a pagar) ou "paid"
 public record InvoiceDto(
