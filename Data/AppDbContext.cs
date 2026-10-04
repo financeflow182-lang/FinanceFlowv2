@@ -16,6 +16,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Income> Incomes => Set<Income>();
     public DbSet<Investment> Investments => Set<Investment>();
     public DbSet<Goal> Goals => Set<Goal>();
+    public DbSet<GoalDeposit> GoalDeposits => Set<GoalDeposit>();
     public DbSet<Alert> Alerts => Set<Alert>();
 
     protected override void OnModelCreating(ModelBuilder mb)
@@ -99,6 +100,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         mb.Entity<Goal>(e => {
             e.Property(x => x.TargetAmount).HasColumnType("numeric(18,2)");
             e.Property(x => x.CurrentAmount).HasColumnType("numeric(18,2)");
+            e.Property(x => x.PlannedMonthly).HasColumnType("numeric(18,2)");
+        });
+
+        // Depósitos em meta: mantidos mesmo se a meta for excluída (histórico do saldo)
+        mb.Entity<GoalDeposit>(e => {
+            e.Property(x => x.Amount).HasColumnType("numeric(18,2)");
+            e.HasOne(x => x.Goal).WithMany().HasForeignKey(x => x.GoalId).OnDelete(DeleteBehavior.SetNull);
+            e.HasIndex(x => new { x.UserId, x.Date });
         });
 
         // Categorias - dados iniciais

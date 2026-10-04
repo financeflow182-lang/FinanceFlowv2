@@ -50,10 +50,13 @@ public class BudgetsController(AppDbContext db) : BaseController
         var otherIncome = await db.Incomes
             .Where(i => i.UserId == UserId && i.Date.Year == year && i.Date.Month == month)
             .SumAsync(i => (decimal?)i.Amount) ?? 0;
+        var goalDeposits = await db.GoalDeposits
+            .Where(d => d.UserId == UserId && d.Date.Year == year && d.Date.Month == month)
+            .SumAsync(d => (decimal?)d.Amount) ?? 0;
         var totalIncome = salary + otherIncome;
-        var balance = totalIncome - expenses - investments;
+        var balance = totalIncome - expenses - investments - goalDeposits;
         var pct = totalIncome > 0 ? Math.Round(expenses / totalIncome * 100, 1) : 0;
 
-        return new BudgetDto(b?.Id ?? 0, year, month, salary, expenses, investments, balance, pct, otherIncome, totalIncome);
+        return new BudgetDto(b?.Id ?? 0, year, month, salary, expenses, investments, balance, pct, otherIncome, totalIncome, goalDeposits);
     }
 }

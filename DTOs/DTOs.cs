@@ -70,7 +70,7 @@ public record UpsertBudgetRequest(
 public record BudgetDto(
     int Id, int Year, int Month, decimal Salary,
     decimal TotalExpenses, decimal TotalInvestments, decimal Balance,
-    decimal SpendingPercent, decimal OtherIncome, decimal TotalIncome);
+    decimal SpendingPercent, decimal OtherIncome, decimal TotalIncome, decimal GoalDeposits);
 
 
 public record CategoryDto(int Id, string Name, string Icon, string Color, bool IsSystem);
@@ -199,15 +199,38 @@ public record UpdateInvestmentRequest([Required, StringLength(100)] string Name,
 public record InvestmentDto(int Id, string Name, string Type, decimal Amount, DateOnly Date, DateTime CreatedAt);
 
 
-public record CreateGoalRequest([Required, StringLength(100)] string Name, [Required, StringLength(16)] string Icon, [Range(0.01, Limits.MaxMoney)] decimal TargetAmount, DateOnly? Deadline);
-public record UpdateGoalRequest([Required, StringLength(100)] string Name, [Required, StringLength(16)] string Icon, [Range(0.01, Limits.MaxMoney)] decimal TargetAmount, DateOnly? Deadline);
+public record CreateGoalRequest(
+    [Required(ErrorMessage = "Informe o nome da meta."), StringLength(100, ErrorMessage = "O nome deve ter no máximo 100 caracteres.")] string Name,
+    [Required(ErrorMessage = "Informe um ícone."), StringLength(16, ErrorMessage = "Ícone inválido.")] string Icon,
+    [Range(0.01, Limits.MaxMoney, ErrorMessage = "Informe um valor alvo maior que zero.")] decimal TargetAmount,
+    DateOnly? Deadline,
+    [Range(0.01, Limits.MaxMoney, ErrorMessage = "Informe um valor mensal maior que zero.")] decimal? PlannedMonthly = null);
+// Atualizar também serve para renovar o prazo
+public record UpdateGoalRequest(
+    [Required(ErrorMessage = "Informe o nome da meta."), StringLength(100, ErrorMessage = "O nome deve ter no máximo 100 caracteres.")] string Name,
+    [Required(ErrorMessage = "Informe um ícone."), StringLength(16, ErrorMessage = "Ícone inválido.")] string Icon,
+    [Range(0.01, Limits.MaxMoney, ErrorMessage = "Informe um valor alvo maior que zero.")] decimal TargetAmount,
+    DateOnly? Deadline,
+    [Range(0.01, Limits.MaxMoney, ErrorMessage = "Informe um valor mensal maior que zero.")] decimal? PlannedMonthly = null);
 public record AddToGoalRequest([Range(0.01, Limits.MaxMoney)] decimal Amount);
 
+// Cenário: guardando Monthly por mês, a meta é batida em Months meses (mês de Date)
+public record GoalScenarioDto(int Months, decimal Monthly, DateOnly Date);
+
+// Status: "completed" | "on_track" | "behind" | "overdue" (prazo vencido) | "no_deadline"
 public record GoalDto(
     int Id, string Name, string Icon,
     decimal TargetAmount, decimal CurrentAmount,
     DateOnly? Deadline, bool IsCompleted,
-    decimal ProgressPercent, DateTime CreatedAt);
+    decimal ProgressPercent, DateTime CreatedAt,
+    decimal? PlannedMonthly,
+    decimal Remaining,
+    int? MonthsLeft,                  // só com prazo
+    decimal? RequiredMonthly,         // só com prazo: quanto guardar por mês para bater a meta
+    string Status,
+    DateOnly? ProjectedDate,          // mês previsto de conclusão guardando PlannedMonthly
+    bool? PlannedMeetsDeadline,       // PlannedMonthly é suficiente para o prazo (só com prazo e aporte planejado)
+    IEnumerable<GoalScenarioDto> Scenarios);
 
 
 public record AlertDto(int Id, string Title, string Message, string Type, bool IsRead, DateTime CreatedAt);
@@ -222,4 +245,4 @@ public record DashboardDto(
 
 public record CategorySummaryDto(CategoryDto Category, decimal Total, decimal Percent);
 
-public record MonthlyTrendDto(int Year, int Month, string Label, decimal Salary, decimal Expenses, decimal Investments, decimal Balance, decimal OtherIncome);
+public record MonthlyTrendDto(int Year, int Month, string Label, decimal Salary, decimal Expenses, decimal Investments, decimal Balance, decimal OtherIncome, decimal GoalDeposits);
