@@ -150,8 +150,21 @@ public class Goal
     public decimal CurrentAmount { get; set; }
     public DateOnly? Deadline { get; set; }
     public bool IsCompleted { get; set; }
+    public decimal? PlannedMonthly { get; set; }   // quanto o usuário pretende guardar por mês
     public int UserId { get; set; }
     public User User { get; set; } = null!;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+// Cada depósito em meta, com data, para descontar do saldo livre do mês
+public class GoalDeposit
+{
+    public int Id { get; set; }
+    public int? GoalId { get; set; }
+    public Goal? Goal { get; set; }
+    public int UserId { get; set; }
+    public decimal Amount { get; set; }
+    public DateOnly Date { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 

@@ -100,7 +100,14 @@ public class GoalsController(AppDbContext db, AlertService alerts) : BaseControl
         if (await db.Goals.CountAsync(g => g.UserId == UserId) >= 200)
             return BadRequest(new { message = "Limite de metas atingido." });
 
-        var goal = new Goal { Name = req.Name, Icon = req.Icon, TargetAmount = req.TargetAmount, Deadline = req.Deadline, UserId = UserId };
+        if (req.Deadline.HasValue && req.Deadline.Value < InvoiceCalculator.Today())
+            return BadRequest(new { message = "O prazo da meta não pode estar no passado." });
+
+        var goal = new Goal
+        {
+            Name = req.Name.Trim(), Icon = req.Icon, TargetAmount = req.TargetAmount,
+            Deadline = req.Deadline, PlannedMonthly = req.PlannedMonthly, UserId = UserId
+        };
         db.Goals.Add(goal);
         await db.SaveChangesAsync();
         return Ok(ToDto(goal));
@@ -111,7 +118,13 @@ public class GoalsController(AppDbContext db, AlertService alerts) : BaseControl
     {
         var goal = await db.Goals.FirstOrDefaultAsync(g => g.Id == id && g.UserId == UserId);
         if (goal == null) return NotFound();
-        goal.Name = req.Name; goal.Icon = req.Icon; goal.TargetAmount = req.TargetAmount; goal.Deadline = req.Deadline;
+        if (req.Deadline.HasValue && req.Deadline.Value < InvoiceCalculator.Today())
+            return BadRequest(new { message = "O prazo da meta não pode estar no passado." });
+
+        goal.Name = req.Name.Trim(); goal.Icon = req.Icon; goal.TargetAmount = req.TargetAmount;
+        goal.Deadline = req.Deadline; goal.PlannedMonthly = req.PlannedMonthly;
+        // Reabre a meta se o valor alvo ou o progresso mudou de modo que ela não esteja mais concluída
+        if (goal.IsCompleted && goal.CurrentAmount < goal.TargetAmount) goal.IsCompleted = false;
         await db.SaveChangesAsync();
         return Ok(ToDto(goal));
     }
@@ -124,6 +137,7 @@ public class GoalsController(AppDbContext db, AlertService alerts) : BaseControl
         if (goal.CurrentAmount + req.Amount > (decimal)Limits.MaxMoney)
             return BadRequest(new { message = "Valor acima do limite permitido." });
         goal.CurrentAmount += req.Amount;
+        db.GoalDeposits.Add(new GoalDeposit { GoalId = goal.Id, UserId = UserId, Amount = req.Amount, Date = InvoiceCalculator.Today() });
         await db.SaveChangesAsync();
         await alerts.CheckGoalAlerts(UserId, id);
         return Ok(ToDto(goal));
@@ -139,10 +153,7 @@ public class GoalsController(AppDbContext db, AlertService alerts) : BaseControl
         return NoContent();
     }
 
-    private static GoalDto ToDto(Goal g) => new(
-        g.Id, g.Name, g.Icon, g.TargetAmount, g.CurrentAmount, g.Deadline, g.IsCompleted,
-        g.TargetAmount > 0 ? Math.Round(g.CurrentAmount / g.TargetAmount * 100, 1) : 0,
-        g.CreatedAt);
+    private static GoalDto ToDto(Goal g) => GoalCalculator.ToDto(g);
 }
 
 
@@ -210,10 +221,13 @@ public class DashboardController(AppDbContext db, AlertService alerts) : BaseCon
         var totalIncome = salary + otherIncome;
         var totalExp = expenses.Sum(e => e.Amount);
         var totalInv = investments.Sum(i => i.Amount);
-        var balance = totalIncome - totalExp - totalInv;
+        var goalDeposits = await db.GoalDeposits
+            .Where(d => d.UserId == UserId && d.Date.Year == year && d.Date.Month == month)
+            .SumAsync(d => (decimal?)d.Amount) ?? 0;
+        var balance = totalIncome - totalExp - totalInv - goalDeposits;
         var pct = totalIncome > 0 ? Math.Round(totalExp / totalIncome * 100, 1) : 0;
 
-        var budgetDto = new BudgetDto(budget?.Id ?? 0, year, month, salary, totalExp, totalInv, balance, pct, otherIncome, totalIncome);
+        var budgetDto = new BudgetDto(budget?.Id ?? 0, year, month, salary, totalExp, totalInv, balance, pct, otherIncome, totalIncome, goalDeposits);
 
 
         var catSummaries = expenses
@@ -234,8 +248,9 @@ public class DashboardController(AppDbContext db, AlertService alerts) : BaseCon
             var e2 = await db.Expenses.ForMonth(UserId, d.Year, d.Month).SumAsync(e => (decimal?)e.Amount) ?? 0;
             var v2 = await db.Investments.Where(v => v.UserId == UserId && v.Date.Year == d.Year && v.Date.Month == d.Month).SumAsync(v => (decimal?)v.Amount) ?? 0;
             var r2 = await db.Incomes.Where(r => r.UserId == UserId && r.Date.Year == d.Year && r.Date.Month == d.Month).SumAsync(r => (decimal?)r.Amount) ?? 0;
+            var g2 = await db.GoalDeposits.Where(x => x.UserId == UserId && x.Date.Year == d.Year && x.Date.Month == d.Month).SumAsync(x => (decimal?)x.Amount) ?? 0;
             var s2 = b2?.Salary ?? 0;
-            trend.Add(new MonthlyTrendDto(d.Year, d.Month, $"{months[d.Month - 1]}/{d.Year % 100:00}", s2, e2, v2, s2 + r2 - e2 - v2, r2));
+            trend.Add(new MonthlyTrendDto(d.Year, d.Month, $"{months[d.Month - 1]}/{d.Year % 100:00}", s2, e2, v2, s2 + r2 - e2 - v2 - g2, r2, g2));
         }
 
 
@@ -247,10 +262,7 @@ public class DashboardController(AppDbContext db, AlertService alerts) : BaseCon
 
         var goals = await db.Goals.Where(g => g.UserId == UserId && !g.IsCompleted)
             .OrderByDescending(g => g.CreatedAt).Take(5).ToListAsync();
-        var goalDtos = goals.Select(g => new GoalDto(
-            g.Id, g.Name, g.Icon, g.TargetAmount, g.CurrentAmount, g.Deadline, g.IsCompleted,
-            g.TargetAmount > 0 ? Math.Round(g.CurrentAmount / g.TargetAmount * 100, 1) : 0,
-            g.CreatedAt));
+        var goalDtos = goals.Select(GoalCalculator.ToDto);
 
         return Ok(new DashboardDto(budgetDto, catSummaries, trend, unread, goalDtos));
     }
