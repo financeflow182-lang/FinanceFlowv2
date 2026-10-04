@@ -131,6 +131,25 @@ builder.Services.AddScoped<AlertService>();
 
 // Controllers
 builder.Services.AddControllers()
+    .ConfigureApiBehaviorOptions(opt =>
+    {
+        // Erros de validação no mesmo formato dos demais: { message, errors }
+        opt.InvalidModelStateResponseFactory = ctx =>
+        {
+            var errors = ctx.ModelState
+                .Where(e => e.Value?.Errors.Count > 0)
+                .SelectMany(e => e.Value!.Errors.Select(x => string.IsNullOrWhiteSpace(x.ErrorMessage)
+                    ? "Dados inválidos."
+                    : x.ErrorMessage))
+                .Distinct()
+                .ToArray();
+            return new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(new
+            {
+                message = errors.FirstOrDefault() ?? "Dados inválidos.",
+                errors
+            });
+        };
+    })
     .AddJsonOptions(opt =>
     {
         opt.JsonSerializerOptions.Converters.Add(

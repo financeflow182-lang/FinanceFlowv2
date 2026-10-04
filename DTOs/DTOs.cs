@@ -2,15 +2,22 @@ using System.ComponentModel.DataAnnotations;
 
 namespace FinancasApi.DTOs;
 
-// Senha: 10-72 bytes (limite do BCrypt), com maiúscula, minúscula e número
+// Senha: mínimo de 10 caracteres, com maiúscula, minúscula e número
 public class StrongPasswordAttribute : ValidationAttribute
 {
     protected override ValidationResult? IsValid(object? value, ValidationContext ctx)
     {
         var p = value as string ?? "";
-        if (p.Length < 10 || System.Text.Encoding.UTF8.GetByteCount(p) > 72
-            || !p.Any(char.IsUpper) || !p.Any(char.IsLower) || !p.Any(char.IsDigit))
-            return new ValidationResult("A senha deve ter de 10 a 72 caracteres, com maiúscula, minúscula e número.");
+        if (p.Length == 0) return ValidationResult.Success; // [Required] cuida do vazio
+
+        if (p.Length < 10)
+            return new ValidationResult("A senha deve ter no mínimo 10 caracteres.");
+        if (!p.Any(char.IsUpper))
+            return new ValidationResult("A senha deve conter pelo menos uma letra maiúscula.");
+        if (!p.Any(char.IsLower))
+            return new ValidationResult("A senha deve conter pelo menos uma letra minúscula.");
+        if (!p.Any(char.IsDigit))
+            return new ValidationResult("A senha deve conter pelo menos um número.");
         return ValidationResult.Success;
     }
 }
@@ -18,13 +25,18 @@ public class StrongPasswordAttribute : ValidationAttribute
 public static class Limits { public const double MaxMoney = 999_999_999.99; }
 
 public record RegisterRequest(
-    [Required, StringLength(100, MinimumLength = 2)] string Name,
-    [Required, EmailAddress, StringLength(254)] string Email,
-    [Required, StrongPassword] string Password);
+    [Required(ErrorMessage = "Informe seu nome."),
+     StringLength(100, MinimumLength = 2, ErrorMessage = "O nome deve ter entre 2 e 100 caracteres.")] string Name,
+    [Required(ErrorMessage = "Informe seu e-mail."),
+     EmailAddress(ErrorMessage = "Informe um e-mail válido."),
+     StringLength(254, ErrorMessage = "O e-mail deve ter no máximo 254 caracteres.")] string Email,
+    [Required(ErrorMessage = "Informe uma senha."), StrongPassword] string Password);
 public record LoginRequest(
-    [Required, StringLength(254)] string Email,
-    [Required, StringLength(72)] string Password);
-public record RefreshRequest([Required, StringLength(200)] string RefreshToken);
+    [Required(ErrorMessage = "Informe seu e-mail."),
+     StringLength(254, ErrorMessage = "O e-mail deve ter no máximo 254 caracteres.")] string Email,
+    [Required(ErrorMessage = "Informe sua senha."),
+     StringLength(72, ErrorMessage = "A senha deve ter no máximo 72 caracteres.")] string Password);
+public record RefreshRequest([Required(ErrorMessage = "Refresh token não informado."), StringLength(200, ErrorMessage = "Refresh token inválido.")] string RefreshToken);
 
 public record AuthResponse(
     string AccessToken,

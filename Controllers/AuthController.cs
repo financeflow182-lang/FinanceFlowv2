@@ -32,7 +32,7 @@ public class AuthController(AppDbContext db, JwtService jwt, IMemoryCache cache,
             return BadRequest(new { message = "A senha não pode conter o e-mail." });
 
         if (await db.Users.AnyAsync(u => u.Email == email))
-            return Conflict(new { message = "E-mail já cadastrado." });
+            return Conflict(new { message = "Este e-mail já está cadastrado." });
 
         var user = new User
         {
@@ -49,7 +49,7 @@ public class AuthController(AppDbContext db, JwtService jwt, IMemoryCache cache,
         catch (DbUpdateException)
         {
             // corrida no índice único de e-mail
-            return Conflict(new { message = "E-mail já cadastrado." });
+            return Conflict(new { message = "Este e-mail já está cadastrado." });
         }
 
         return Ok(await BuildAuthResponse(user));
@@ -67,7 +67,7 @@ public class AuthController(AppDbContext db, JwtService jwt, IMemoryCache cache,
         {
             Response.Headers.RetryAfter = ((int)LockDuration.TotalSeconds).ToString();
             return StatusCode(StatusCodes.Status429TooManyRequests,
-                new { message = "Muitas tentativas. Tente novamente mais tarde." });
+                new { message = "Muitas tentativas de login. Tente novamente em 15 minutos." });
         }
 
         var user = await db.Users.FirstOrDefaultAsync(u => u.Email == email);
@@ -97,7 +97,7 @@ public class AuthController(AppDbContext db, JwtService jwt, IMemoryCache cache,
             .FirstOrDefaultAsync(t => t.Token == hash);
 
         if (stored == null || stored.ExpiresAt < DateTime.UtcNow)
-            return Unauthorized(new { message = "Refresh token inválido ou expirado." });
+            return Unauthorized(new { message = "Sessão expirada. Faça login novamente." });
 
         // Reuso de token já rotacionado = possível roubo: revoga todas as sessões do usuário
         if (stored.IsRevoked)
@@ -106,7 +106,7 @@ public class AuthController(AppDbContext db, JwtService jwt, IMemoryCache cache,
             await db.RefreshTokens
                 .Where(t => t.UserId == stored.UserId && !t.IsRevoked)
                 .ExecuteUpdateAsync(s => s.SetProperty(t => t.IsRevoked, true));
-            return Unauthorized(new { message = "Refresh token inválido ou expirado." });
+            return Unauthorized(new { message = "Sessão expirada. Faça login novamente." });
         }
 
         // Rotação atômica: só uma requisição consegue revogar o token
@@ -115,7 +115,7 @@ public class AuthController(AppDbContext db, JwtService jwt, IMemoryCache cache,
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.IsRevoked, true));
 
         if (revoked == 0)
-            return Unauthorized(new { message = "Refresh token inválido ou expirado." });
+            return Unauthorized(new { message = "Sessão expirada. Faça login novamente." });
 
         return Ok(await BuildAuthResponse(stored.User));
     }
