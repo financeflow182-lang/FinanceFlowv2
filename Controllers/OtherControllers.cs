@@ -193,8 +193,8 @@ public class DashboardController(AppDbContext db) : BaseController
             .FirstOrDefaultAsync(b => b.UserId == UserId && b.Year == year && b.Month == month);
         var salary = budget?.Salary ?? 0;
 
-        var expenses = await db.Expenses.Include(e => e.Category)
-            .Where(e => e.UserId == UserId && e.Date.Year == year && e.Date.Month == month)
+        var expenses = await db.Expenses.ForMonth(UserId, year, month)
+            .Include(e => e.Category)
             .ToListAsync();
         var investments = await db.Investments
             .Where(i => i.UserId == UserId && i.Date.Year == year && i.Date.Month == month)
@@ -228,7 +228,7 @@ public class DashboardController(AppDbContext db) : BaseController
         {
             var d = new DateTime(year, month, 1).AddMonths(-i);
             var b2 = await db.MonthlyBudgets.FirstOrDefaultAsync(b => b.UserId == UserId && b.Year == d.Year && b.Month == d.Month);
-            var e2 = await db.Expenses.Where(e => e.UserId == UserId && e.Date.Year == d.Year && e.Date.Month == d.Month).SumAsync(e => (decimal?)e.Amount) ?? 0;
+            var e2 = await db.Expenses.ForMonth(UserId, d.Year, d.Month).SumAsync(e => (decimal?)e.Amount) ?? 0;
             var v2 = await db.Investments.Where(v => v.UserId == UserId && v.Date.Year == d.Year && v.Date.Month == d.Month).SumAsync(v => (decimal?)v.Amount) ?? 0;
             var r2 = await db.Incomes.Where(r => r.UserId == UserId && r.Date.Year == d.Year && r.Date.Month == d.Month).SumAsync(r => (decimal?)r.Amount) ?? 0;
             var s2 = b2?.Salary ?? 0;

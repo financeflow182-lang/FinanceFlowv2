@@ -42,7 +42,7 @@ public class BudgetsController(AppDbContext db) : BaseController
     {
         var salary = b?.Salary ?? 0;
         var expenses = await db.Expenses
-            .Where(e => e.UserId == UserId && e.Date.Year == year && e.Date.Month == month)
+            .ForMonth(UserId, year, month)
             .SumAsync(e => (decimal?)e.Amount) ?? 0;
         var investments = await db.Investments
             .Where(i => i.UserId == UserId && i.Date.Year == year && i.Date.Month == month)

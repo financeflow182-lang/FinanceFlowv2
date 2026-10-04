@@ -19,7 +19,7 @@ public class AlertService(AppDbContext db, IConfiguration config)
         if (income == 0) return;
 
         var totalExp = await db.Expenses
-            .Where(e => e.UserId == userId && e.Date.Year == year && e.Date.Month == month)
+            .ForMonth(userId, year, month)
             .SumAsync(e => e.Amount);
 
         var pct = totalExp / income * 100;
@@ -44,7 +44,7 @@ public class AlertService(AppDbContext db, IConfiguration config)
 
         // Alerta de gastos elevados por categoria — se qualquer categoria exceder 40% da receita
         var catTotals = await db.Expenses
-            .Where(e => e.UserId == userId && e.Date.Year == year && e.Date.Month == month)
+            .ForMonth(userId, year, month)
             .GroupBy(e => new { e.CategoryId, e.Category.Name, e.Category.Icon })
             .Select(g => new { g.Key.Name, g.Key.Icon, Total = g.Sum(e => e.Amount) })
             .ToListAsync();
