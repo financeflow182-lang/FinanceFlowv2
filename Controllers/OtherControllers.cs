@@ -182,12 +182,15 @@ public class AlertsController(AppDbContext db) : BaseController
 
 
 [Route("api/dashboard")]
-public class DashboardController(AppDbContext db) : BaseController
+public class DashboardController(AppDbContext db, AlertService alerts) : BaseController
 {
     [HttpGet("{year}/{month}")]
     public async Task<ActionResult<DashboardDto>> Get(
         [Range(2000, 2100)] int year, [Range(1, 12)] int month)
     {
+        // Alertas de cartão dependem da data (vencimentos), então são verificados ao abrir o dashboard
+        await alerts.CheckCardAlertsAsync(UserId);
+
         // Budget
         var budget = await db.MonthlyBudgets
             .FirstOrDefaultAsync(b => b.UserId == UserId && b.Year == year && b.Month == month);

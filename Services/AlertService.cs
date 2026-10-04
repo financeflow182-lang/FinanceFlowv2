@@ -66,6 +66,75 @@ public class AlertService(AppDbContext db, IConfiguration config)
         await db.SaveChangesAsync();
     }
 
+    // Alertas de cartão: limite quase esgotado/esgotado e fatura vencendo/vencida
+    public async Task CheckCardAlertsAsync(int userId)
+    {
+        var cards = await db.CreditCards.Where(c => c.UserId == userId && !c.IsArchived).ToListAsync();
+        if (cards.Count == 0) return;
+
+        var today = InvoiceCalculator.Today();
+        var now = DateTime.UtcNow;
+
+        foreach (var card in cards)
+        {
+            // Limite: um alerta por nível e por mês
+            var used = await db.UsedLimitAsync(userId, card.Id);
+            var pct = card.Limit > 0 ? used / card.Limit * 100 : 0;
+            if (pct >= _threshold)
+            {
+                var exhausted = pct >= 100;
+                var title = exhausted ? $"🚨 Limite esgotado: {card.Nickname}" : $"💳 Limite alto: {card.Nickname}";
+                var already = await db.Alerts.AnyAsync(a =>
+                    a.UserId == userId && a.Title == title &&
+                    a.CreatedAt.Year == now.Year && a.CreatedAt.Month == now.Month);
+                if (!already)
+                    db.Alerts.Add(new Alert
+                    {
+                        UserId = userId, Title = title, Type = exhausted ? "danger" : "warning",
+                        Message = exhausted
+                            ? $"O limite do cartão {card.Nickname} acabou ({pct:F0}% usado)."
+                            : $"Você já usou {pct:F0}% do limite do cartão {card.Nickname}."
+                    });
+            }
+
+            // Faturas fechadas e não pagas dos últimos meses: vence em até 3 dias ou já venceu
+            var (curYear, curMonth) = InvoiceCalculator.InvoiceFor(today, card.ClosingDay);
+            var current = new DateOnly(curYear, curMonth, 1);
+            for (var back = 0; back <= 2; back++)
+            {
+                var inv = current.AddMonths(-back);
+                var due = InvoiceCalculator.DueDate(inv.Year, inv.Month, card.ClosingDay, card.DueDay);
+                var daysLeft = due.DayNumber - today.DayNumber;
+                if (daysLeft > 3) continue;
+
+                if (await db.InvoicePayments.AnyAsync(p => p.CreditCardId == card.Id && p.Year == inv.Year && p.Month == inv.Month))
+                    continue;
+
+                var total = await db.InvoiceItems(userId, card.Id, inv.Year, inv.Month).SumAsync(e => (decimal?)e.Amount) ?? 0;
+                if (total <= 0) continue;
+
+                var overdue = daysLeft < 0;
+                var title = overdue
+                    ? $"⚠️ Fatura vencida: {card.Nickname} ({due:dd/MM})"
+                    : $"📅 Fatura vencendo: {card.Nickname} ({due:dd/MM})";
+                var exists = await db.Alerts.AnyAsync(a => a.UserId == userId && a.Title == title);
+                if (exists) continue;
+
+                db.Alerts.Add(new Alert
+                {
+                    UserId = userId, Title = title, Type = overdue ? "danger" : "warning",
+                    Message = overdue
+                        ? $"A fatura de R$ {total:N2} do cartão {card.Nickname} venceu em {due:dd/MM} e não está paga."
+                        : daysLeft == 0
+                            ? $"A fatura de R$ {total:N2} do cartão {card.Nickname} vence hoje."
+                            : $"A fatura de R$ {total:N2} do cartão {card.Nickname} vence em {daysLeft} dia(s), em {due:dd/MM}."
+                });
+            }
+        }
+
+        await db.SaveChangesAsync();
+    }
+
     public async Task CheckGoalAlerts(int userId, int goalId)
     {
         var goal = await db.Goals.FindAsync(goalId); //

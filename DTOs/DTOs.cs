@@ -101,8 +101,71 @@ public record ExpenseDto(
     DateOnly Date,
     CategoryDto Category,
     bool IsRecurring,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    int? CreditCardId = null,
+    int? InstallmentNumber = null,
+    int? InstallmentTotal = null,
+    Guid? InstallmentGroupId = null);
 
+
+public static class CardBrands
+{
+    public static readonly string[] All = ["Visa", "Mastercard", "Elo", "Amex", "Hipercard", "Outra"];
+}
+
+public class CardBrandAttribute : ValidationAttribute
+{
+    protected override ValidationResult? IsValid(object? value, ValidationContext ctx) =>
+        value is string s && CardBrands.All.Contains(s)
+            ? ValidationResult.Success
+            : new ValidationResult($"Bandeira inválida. Use: {string.Join(", ", CardBrands.All)}.");
+}
+
+public record BankDto(int Id, string Name, string Icon, string Color, bool IsSystem);
+public record CreateBankRequest(
+    [Required(ErrorMessage = "Informe o nome do banco."), StringLength(50, MinimumLength = 2, ErrorMessage = "O nome do banco deve ter entre 2 e 50 caracteres.")] string Name,
+    [Required(ErrorMessage = "Informe a cor."), RegularExpression("^#[0-9a-fA-F]{6}$", ErrorMessage = "Cor inválida. Use o formato #RRGGBB.")] string Color);
+
+public record CreateCardRequest(
+    int BankId,
+    [Required(ErrorMessage = "Informe um apelido para o cartão."), StringLength(50, ErrorMessage = "O apelido deve ter no máximo 50 caracteres.")] string Nickname,
+    [Required(ErrorMessage = "Informe a bandeira."), CardBrand] string Brand,
+    [RegularExpression(@"^\d{4}$", ErrorMessage = "Informe somente os 4 últimos dígitos.")] string? Last4,
+    [Range(0.01, Limits.MaxMoney, ErrorMessage = "Informe um limite maior que zero.")] decimal Limit,
+    [Range(1, 31, ErrorMessage = "O dia de fechamento deve estar entre 1 e 31.")] int ClosingDay,
+    [Range(1, 31, ErrorMessage = "O dia de vencimento deve estar entre 1 e 31.")] int DueDay);
+
+public record UpdateCardRequest(
+    int BankId,
+    [Required(ErrorMessage = "Informe um apelido para o cartão."), StringLength(50, ErrorMessage = "O apelido deve ter no máximo 50 caracteres.")] string Nickname,
+    [Required(ErrorMessage = "Informe a bandeira."), CardBrand] string Brand,
+    [RegularExpression(@"^\d{4}$", ErrorMessage = "Informe somente os 4 últimos dígitos.")] string? Last4,
+    [Range(0.01, Limits.MaxMoney, ErrorMessage = "Informe um limite maior que zero.")] decimal Limit,
+    [Range(1, 31, ErrorMessage = "O dia de fechamento deve estar entre 1 e 31.")] int ClosingDay,
+    [Range(1, 31, ErrorMessage = "O dia de vencimento deve estar entre 1 e 31.")] int DueDay,
+    bool IsArchived);
+
+public record CardDto(
+    int Id, int BankId, string BankName, string BankColor, string BankIcon,
+    string Nickname, string Brand, string? Last4,
+    decimal Limit, int ClosingDay, int DueDay, bool IsArchived,
+    decimal UsedLimit, decimal AvailableLimit,
+    int CurrentInvoiceYear, int CurrentInvoiceMonth, decimal CurrentInvoiceTotal);
+
+public record CreateCardPurchaseRequest(
+    [Required(ErrorMessage = "Informe a descrição."), StringLength(200, ErrorMessage = "A descrição deve ter no máximo 200 caracteres.")] string Description,
+    [Range(0.01, Limits.MaxMoney, ErrorMessage = "Informe um valor maior que zero.")] decimal Amount,
+    DateOnly Date,
+    int CategoryId,
+    [Range(1, 48, ErrorMessage = "O número de parcelas deve estar entre 1 e 48.")] int Installments = 1,
+    bool IsRecurring = false);
+
+// Status: "open" (ainda não fechou), "closed" (fechada, a pagar) ou "paid"
+public record InvoiceDto(
+    int CardId, int Year, int Month,
+    DateOnly ClosingDate, DateOnly DueDate,
+    decimal Total, string Status, DateTime? PaidAt,
+    IEnumerable<ExpenseDto> Items);
 
 public record CreateIncomeRequest(
     [Required(ErrorMessage = "Informe a descrição."), StringLength(200, ErrorMessage = "A descrição deve ter no máximo 200 caracteres.")] string Description,

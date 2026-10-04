@@ -62,6 +62,55 @@ public class Expense
     public User User { get; set; } = null!;
     public bool IsRecurring { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    // Compras no cartão: fatura a que pertencem (mês de fechamento) e dados de parcelamento
+    public int? CreditCardId { get; set; }
+    public CreditCard? CreditCard { get; set; }
+    public int? InvoiceYear { get; set; }
+    public int? InvoiceMonth { get; set; }
+    public Guid? InstallmentGroupId { get; set; }
+    public int? InstallmentNumber { get; set; }
+    public int? InstallmentTotal { get; set; }
+}
+
+public class Bank
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Icon { get; set; } = string.Empty;
+    public string Color { get; set; } = string.Empty;
+    public bool IsSystem { get; set; }
+    public int? UserId { get; set; }
+}
+
+// Guarda só dados de identificação: nunca número completo, CVV ou validade
+public class CreditCard
+{
+    public int Id { get; set; }
+    public string Nickname { get; set; } = string.Empty;
+    public string Brand { get; set; } = string.Empty;
+    public string? Last4 { get; set; }
+    public decimal Limit { get; set; }
+    public int ClosingDay { get; set; }
+    public int DueDay { get; set; }
+    public bool IsArchived { get; set; }
+    public int BankId { get; set; }
+    public Bank Bank { get; set; } = null!;
+    public int UserId { get; set; }
+    public User User { get; set; } = null!;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class InvoicePayment
+{
+    public int Id { get; set; }
+    public int CreditCardId { get; set; }
+    public CreditCard CreditCard { get; set; } = null!;
+    public int UserId { get; set; }
+    public int Year { get; set; }   // mês de fechamento da fatura
+    public int Month { get; set; }
+    public decimal Amount { get; set; }
+    public DateTime PaidAt { get; set; } = DateTime.UtcNow;
 }
 
 public class Income

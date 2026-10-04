@@ -149,7 +149,11 @@ public class ExpensesController(AppDbContext db, AlertService alerts) : BaseCont
                 e.Category.IsSystem
             ),
             e.IsRecurring,
-            e.CreatedAt
+            e.CreatedAt,
+            e.CreditCardId,
+            e.InstallmentNumber,
+            e.InstallmentTotal,
+            e.InstallmentGroupId
         );
     }
 }
