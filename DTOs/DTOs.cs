@@ -24,6 +24,20 @@ public class StrongPasswordAttribute : ValidationAttribute
 
 public static class Limits { public const double MaxMoney = 999_999_999.99; }
 
+public static class IncomeCategories
+{
+    public static readonly string[] All =
+        ["Freela", "Venda", "13º Salário", "Férias", "Reembolso", "Rendimentos", "Presente", "Outros"];
+}
+
+public class IncomeCategoryAttribute : ValidationAttribute
+{
+    protected override ValidationResult? IsValid(object? value, ValidationContext ctx) =>
+        value is string s && IncomeCategories.All.Contains(s)
+            ? ValidationResult.Success
+            : new ValidationResult($"Categoria de receita inválida. Use: {string.Join(", ", IncomeCategories.All)}.");
+}
+
 public record RegisterRequest(
     [Required(ErrorMessage = "Informe seu nome."),
      StringLength(100, MinimumLength = 2, ErrorMessage = "O nome deve ter entre 2 e 100 caracteres.")] string Name,
@@ -52,10 +66,11 @@ public record UpsertBudgetRequest(
     [Range(1, 12)] int Month,
     [Range(0, Limits.MaxMoney)] decimal Salary);
 
+// Salary = salário base; OtherIncome = receitas lançadas; TotalIncome = Salary + OtherIncome
 public record BudgetDto(
     int Id, int Year, int Month, decimal Salary,
     decimal TotalExpenses, decimal TotalInvestments, decimal Balance,
-    decimal SpendingPercent);
+    decimal SpendingPercent, decimal OtherIncome, decimal TotalIncome);
 
 
 public record CategoryDto(int Id, string Name, string Icon, string Color, bool IsSystem);
@@ -89,6 +104,18 @@ public record ExpenseDto(
     DateTime CreatedAt);
 
 
+public record CreateIncomeRequest(
+    [Required(ErrorMessage = "Informe a descrição."), StringLength(200, ErrorMessage = "A descrição deve ter no máximo 200 caracteres.")] string Description,
+    [Required(ErrorMessage = "Informe a categoria."), IncomeCategory] string Category,
+    [Range(0.01, Limits.MaxMoney, ErrorMessage = "Informe um valor maior que zero.")] decimal Amount,
+    DateOnly Date);
+public record UpdateIncomeRequest(
+    [Required(ErrorMessage = "Informe a descrição."), StringLength(200, ErrorMessage = "A descrição deve ter no máximo 200 caracteres.")] string Description,
+    [Required(ErrorMessage = "Informe a categoria."), IncomeCategory] string Category,
+    [Range(0.01, Limits.MaxMoney, ErrorMessage = "Informe um valor maior que zero.")] decimal Amount,
+    DateOnly Date);
+public record IncomeDto(int Id, string Description, string Category, decimal Amount, DateOnly Date, DateTime CreatedAt);
+
 public record CreateInvestmentRequest([Required, StringLength(100)] string Name, [Required, StringLength(50)] string Type, [Range(0.01, Limits.MaxMoney)] decimal Amount, DateOnly Date);
 public record UpdateInvestmentRequest([Required, StringLength(100)] string Name, [Required, StringLength(50)] string Type, [Range(0.01, Limits.MaxMoney)] decimal Amount, DateOnly Date);
 
@@ -118,4 +145,4 @@ public record DashboardDto(
 
 public record CategorySummaryDto(CategoryDto Category, decimal Total, decimal Percent);
 
-public record MonthlyTrendDto(int Year, int Month, string Label, decimal Salary, decimal Expenses, decimal Investments, decimal Balance);
+public record MonthlyTrendDto(int Year, int Month, string Label, decimal Salary, decimal Expenses, decimal Investments, decimal Balance, decimal OtherIncome);

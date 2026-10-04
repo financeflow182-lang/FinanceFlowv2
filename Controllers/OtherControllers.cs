@@ -200,12 +200,17 @@ public class DashboardController(AppDbContext db) : BaseController
             .Where(i => i.UserId == UserId && i.Date.Year == year && i.Date.Month == month)
             .ToListAsync();
 
+        var otherIncome = await db.Incomes
+            .Where(i => i.UserId == UserId && i.Date.Year == year && i.Date.Month == month)
+            .SumAsync(i => (decimal?)i.Amount) ?? 0;
+
+        var totalIncome = salary + otherIncome;
         var totalExp = expenses.Sum(e => e.Amount);
         var totalInv = investments.Sum(i => i.Amount);
-        var balance = salary - totalExp - totalInv;
-        var pct = salary > 0 ? Math.Round(totalExp / salary * 100, 1) : 0;
+        var balance = totalIncome - totalExp - totalInv;
+        var pct = totalIncome > 0 ? Math.Round(totalExp / totalIncome * 100, 1) : 0;
 
-        var budgetDto = new BudgetDto(budget?.Id ?? 0, year, month, salary, totalExp, totalInv, balance, pct);
+        var budgetDto = new BudgetDto(budget?.Id ?? 0, year, month, salary, totalExp, totalInv, balance, pct, otherIncome, totalIncome);
 
 
         var catSummaries = expenses
@@ -213,7 +218,7 @@ public class DashboardController(AppDbContext db) : BaseController
             .Select(g => new CategorySummaryDto(
                 new CategoryDto(g.Key.Id, g.Key.Name, g.Key.Icon, g.Key.Color, g.Key.IsSystem),
                 g.Sum(e => e.Amount),
-                salary > 0 ? Math.Round(g.Sum(e => e.Amount) / salary * 100, 1) : 0))
+                totalIncome > 0 ? Math.Round(g.Sum(e => e.Amount) / totalIncome * 100, 1) : 0))
             .OrderByDescending(s => s.Total);
 
 
@@ -225,8 +230,9 @@ public class DashboardController(AppDbContext db) : BaseController
             var b2 = await db.MonthlyBudgets.FirstOrDefaultAsync(b => b.UserId == UserId && b.Year == d.Year && b.Month == d.Month);
             var e2 = await db.Expenses.Where(e => e.UserId == UserId && e.Date.Year == d.Year && e.Date.Month == d.Month).SumAsync(e => (decimal?)e.Amount) ?? 0;
             var v2 = await db.Investments.Where(v => v.UserId == UserId && v.Date.Year == d.Year && v.Date.Month == d.Month).SumAsync(v => (decimal?)v.Amount) ?? 0;
+            var r2 = await db.Incomes.Where(r => r.UserId == UserId && r.Date.Year == d.Year && r.Date.Month == d.Month).SumAsync(r => (decimal?)r.Amount) ?? 0;
             var s2 = b2?.Salary ?? 0;
-            trend.Add(new MonthlyTrendDto(d.Year, d.Month, $"{months[d.Month - 1]}/{d.Year % 100:00}", s2, e2, v2, s2 - e2 - v2));
+            trend.Add(new MonthlyTrendDto(d.Year, d.Month, $"{months[d.Month - 1]}/{d.Year % 100:00}", s2, e2, v2, s2 + r2 - e2 - v2, r2));
         }
 
 

@@ -12,6 +12,7 @@ public class User
 
     public ICollection<MonthlyBudget> Budgets { get; set; } = [];
     public ICollection<Expense> Expenses { get; set; } = [];
+    public ICollection<Income> Incomes { get; set; } = [];
     public ICollection<Investment> Investments { get; set; } = [];
     public ICollection<Goal> Goals { get; set; } = [];
     public ICollection<RefreshToken> RefreshTokens { get; set; } = [];
@@ -60,6 +61,18 @@ public class Expense
     public int UserId { get; set; }
     public User User { get; set; } = null!;
     public bool IsRecurring { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class Income
+{
+    public int Id { get; set; }
+    public string Description { get; set; } = string.Empty;
+    public string Category { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public DateOnly Date { get; set; }
+    public int UserId { get; set; }
+    public User User { get; set; } = null!;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 

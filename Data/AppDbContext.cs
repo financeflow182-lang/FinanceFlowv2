@@ -10,6 +10,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<MonthlyBudget> MonthlyBudgets => Set<MonthlyBudget>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Expense> Expenses => Set<Expense>();
+    public DbSet<Income> Incomes => Set<Income>();
     public DbSet<Investment> Investments => Set<Investment>();
     public DbSet<Goal> Goals => Set<Goal>();
     public DbSet<Alert> Alerts => Set<Alert>();
@@ -38,6 +39,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         mb.Entity<Expense>(e => {
             e.Property(x => x.Amount).HasColumnType("numeric(18,2)");
             e.HasOne(x => x.Category).WithMany(c => c.Expenses).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Receita
+        mb.Entity<Income>(e => {
+            e.Property(x => x.Amount).HasColumnType("numeric(18,2)");
+            e.Property(x => x.Category).HasMaxLength(50);
+            e.HasIndex(x => new { x.UserId, x.Date });
         });
 
         // Investimento 

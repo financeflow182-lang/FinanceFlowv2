@@ -12,13 +12,17 @@ public class AlertService(AppDbContext db, IConfiguration config)
     {
         var budget = await db.MonthlyBudgets
             .FirstOrDefaultAsync(b => b.UserId == userId && b.Year == year && b.Month == month);
-        if (budget == null || budget.Salary == 0) return;
+        var otherIncome = await db.Incomes
+            .Where(i => i.UserId == userId && i.Date.Year == year && i.Date.Month == month)
+            .SumAsync(i => (decimal?)i.Amount) ?? 0;
+        var income = (budget?.Salary ?? 0) + otherIncome;
+        if (income == 0) return;
 
         var totalExp = await db.Expenses
             .Where(e => e.UserId == userId && e.Date.Year == year && e.Date.Month == month)
             .SumAsync(e => e.Amount);
 
-        var pct = totalExp / budget.Salary * 100;
+        var pct = totalExp / income * 100;
 
         // Alerta de gastos elevados ou orçamento estourado
         if (pct >= _threshold)
@@ -26,8 +30,8 @@ public class AlertService(AppDbContext db, IConfiguration config)
             var level = pct >= 100 ? "danger" : "warning";
             var title = pct >= 100 ? "⚠️ Orçamento estourado!" : "🔔 Gastos elevados";
             var msg   = pct >= 100
-                ? $"Seus gastos ({pct:F0}%) já ultrapassaram o salário em {month:00}/{year}."
-                : $"Você já usou {pct:F0}% do salário em {month:00}/{year}. Fique de olho!";
+                ? $"Seus gastos ({pct:F0}%) já ultrapassaram a receita em {month:00}/{year}."
+                : $"Você já usou {pct:F0}% da receita em {month:00}/{year}. Fique de olho!";
 
             var already = await db.Alerts.AnyAsync(a =>
                 a.UserId == userId && a.Type == level &&
@@ -38,14 +42,14 @@ public class AlertService(AppDbContext db, IConfiguration config)
                 db.Alerts.Add(new Alert { UserId = userId, Title = title, Message = msg, Type = level });
         }
 
-        // Alerta de gastos elevados por categoria — se qualquer categoria exceder 40% do salário
+        // Alerta de gastos elevados por categoria — se qualquer categoria exceder 40% da receita
         var catTotals = await db.Expenses
             .Where(e => e.UserId == userId && e.Date.Year == year && e.Date.Month == month)
             .GroupBy(e => new { e.CategoryId, e.Category.Name, e.Category.Icon })
             .Select(g => new { g.Key.Name, g.Key.Icon, Total = g.Sum(e => e.Amount) })
             .ToListAsync();
 
-        foreach (var cat in catTotals.Where(c => c.Total / budget.Salary * 100 >= 40))
+        foreach (var cat in catTotals.Where(c => c.Total / income * 100 >= 40))
         {
             var title = $"{cat.Icon} Gasto alto em {cat.Name}";
             var already = await db.Alerts.AnyAsync(a =>
@@ -55,7 +59,7 @@ public class AlertService(AppDbContext db, IConfiguration config)
                 db.Alerts.Add(new Alert
                 {
                     UserId = userId, Title = title, Type = "warning",
-                    Message = $"A categoria {cat.Name} consumiu {cat.Total / budget.Salary * 100:F0}% do seu salário este mês."
+                    Message = $"A categoria {cat.Name} consumiu {cat.Total / income * 100:F0}% da sua receita este mês."
                 });
         }
 

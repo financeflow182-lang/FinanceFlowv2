@@ -47,9 +47,13 @@ public class BudgetsController(AppDbContext db) : BaseController
         var investments = await db.Investments
             .Where(i => i.UserId == UserId && i.Date.Year == year && i.Date.Month == month)
             .SumAsync(i => (decimal?)i.Amount) ?? 0;
-        var balance = salary - expenses - investments;
-        var pct = salary > 0 ? Math.Round(expenses / salary * 100, 1) : 0;
+        var otherIncome = await db.Incomes
+            .Where(i => i.UserId == UserId && i.Date.Year == year && i.Date.Month == month)
+            .SumAsync(i => (decimal?)i.Amount) ?? 0;
+        var totalIncome = salary + otherIncome;
+        var balance = totalIncome - expenses - investments;
+        var pct = totalIncome > 0 ? Math.Round(expenses / totalIncome * 100, 1) : 0;
 
-        return new BudgetDto(b?.Id ?? 0, year, month, salary, expenses, investments, balance, pct);
+        return new BudgetDto(b?.Id ?? 0, year, month, salary, expenses, investments, balance, pct, otherIncome, totalIncome);
     }
 }
