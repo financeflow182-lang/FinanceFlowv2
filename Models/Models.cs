@@ -71,6 +71,10 @@ public class Expense
     public Guid? InstallmentGroupId { get; set; }
     public int? InstallmentNumber { get; set; }
     public int? InstallmentTotal { get; set; }
+
+    // Saldo de fatura já existente (lançado em bloco); pode ficar fora do orçamento do mês para não duplicar gastos
+    public bool IsInvoiceBalance { get; set; }
+    public bool ExcludeFromBudget { get; set; }
 }
 
 public class Bank

@@ -18,7 +18,7 @@ public class ExpensesController(AppDbContext db, AlertService alerts) : BaseCont
     {
         var q = db.Expenses
             .Include(e => e.Category)
-            .Where(e => e.UserId == UserId);
+            .Where(e => e.UserId == UserId && !e.ExcludeFromBudget);
 
         if (year.HasValue && month.HasValue)
         {
@@ -153,7 +153,9 @@ public class ExpensesController(AppDbContext db, AlertService alerts) : BaseCont
             e.CreditCardId,
             e.InstallmentNumber,
             e.InstallmentTotal,
-            e.InstallmentGroupId
+            e.InstallmentGroupId,
+            e.IsInvoiceBalance,
+            e.ExcludeFromBudget
         );
     }
 }

@@ -210,6 +210,79 @@ public class CardsController(AppDbContext db, AlertService alerts) : BaseControl
     }
 
 
+    // ---- Saldos de fatura já existentes ----
+
+    [HttpGet("{id}/invoice-balances")]
+    public async Task<ActionResult<IEnumerable<InvoiceBalanceDto>>> GetInvoiceBalances(int id)
+    {
+        if (await FindCard(id) == null) return NotFound();
+
+        var list = await db.Expenses
+            .Where(e => e.UserId == UserId && e.CreditCardId == id && e.IsInvoiceBalance)
+            .OrderBy(e => e.InvoiceYear).ThenBy(e => e.InvoiceMonth)
+            .ToListAsync();
+        return Ok(list.Select(ToBalanceDto));
+    }
+
+    // Define de uma vez o valor já comprometido de cada fatura (ex.: parcelas até 2027).
+    // Reenviar um mês atualiza o valor; valor 0 remove.
+    [HttpPut("{id}/invoice-balances")]
+    public async Task<ActionResult<IEnumerable<InvoiceBalanceDto>>> SetInvoiceBalances(int id, SetInvoiceBalancesRequest req)
+    {
+        var card = await FindCard(id);
+        if (card == null) return NotFound();
+        if (card.IsArchived)
+            return BadRequest(new { message = "Este cartão está arquivado." });
+
+        if (req.Items.GroupBy(i => (i.Year, i.Month)).Any(g => g.Count() > 1))
+            return BadRequest(new { message = "Há faturas repetidas na lista." });
+
+        var other = await db.Categories.FirstOrDefaultAsync(c => c.IsSystem && c.Name == "Outros");
+        if (other == null)
+            return BadRequest(new { message = "Categoria padrão não encontrada." });
+
+        var existing = await db.Expenses
+            .Where(e => e.UserId == UserId && e.CreditCardId == id && e.IsInvoiceBalance)
+            .ToListAsync();
+
+        foreach (var item in req.Items)
+        {
+            var current = existing.FirstOrDefault(e => e.InvoiceYear == item.Year && e.InvoiceMonth == item.Month);
+
+            if (item.Amount == 0)
+            {
+                if (current != null) db.Expenses.Remove(current);
+                continue;
+            }
+
+            if (current == null)
+            {
+                db.Expenses.Add(new Expense
+                {
+                    Description = $"Parcelas já existentes ({item.Month:00}/{item.Year})",
+                    Amount = item.Amount,
+                    Date = new DateOnly(item.Year, item.Month, 1),
+                    CategoryId = other.Id,
+                    UserId = UserId,
+                    CreditCardId = id,
+                    InvoiceYear = item.Year,
+                    InvoiceMonth = item.Month,
+                    IsInvoiceBalance = true,
+                    ExcludeFromBudget = !item.CountInBudget
+                });
+            }
+            else
+            {
+                current.Amount = item.Amount;
+                current.ExcludeFromBudget = !item.CountInBudget;
+            }
+        }
+
+        await db.SaveChangesAsync();
+        return await GetInvoiceBalances(id);
+    }
+
+
     // ---- Faturas ----
 
     // Fatura identificada pelo mês de fechamento
@@ -308,8 +381,12 @@ public class CardsController(AppDbContext db, AlertService alerts) : BaseControl
             year, month, currentTotal);
     }
 
+    private static InvoiceBalanceDto ToBalanceDto(Expense e) =>
+        new(e.Id, e.InvoiceYear!.Value, e.InvoiceMonth!.Value, e.Amount, !e.ExcludeFromBudget);
+
     private static ExpenseDto ToExpenseDto(Expense e) => new(
         e.Id, e.Description, e.Amount, e.Date,
         new CategoryDto(e.Category.Id, e.Category.Name, e.Category.Icon, e.Category.Color, e.Category.IsSystem),
-        e.IsRecurring, e.CreatedAt, e.CreditCardId, e.InstallmentNumber, e.InstallmentTotal, e.InstallmentGroupId);
+        e.IsRecurring, e.CreatedAt, e.CreditCardId, e.InstallmentNumber, e.InstallmentTotal, e.InstallmentGroupId,
+        e.IsInvoiceBalance, e.ExcludeFromBudget);
 }
