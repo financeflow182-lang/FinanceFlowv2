@@ -21,3 +21,6 @@ appsettings.Local.json
 *.save
 appsettings.*.json
 !appsettings.json
+
+# Guia de mudanças do frontend
+FRONTEND_RECEITAS.md
