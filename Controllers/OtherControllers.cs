@@ -207,9 +207,8 @@ public class DashboardController(AppDbContext db, AlertService alerts) : BaseCon
             .FirstOrDefaultAsync(b => b.UserId == UserId && b.Year == year && b.Month == month);
         var salary = budget?.Salary ?? 0;
 
-        var expenses = await db.Expenses.ForMonth(UserId, year, month)
-            .Include(e => e.Category)
-            .ToListAsync();
+        var monthExp = await db.MonthExpensesAsync(UserId, year, month, includeCategory: true);
+        var expenses = monthExp.Counted;
         var investments = await db.Investments
             .Where(i => i.UserId == UserId && i.Date.Year == year && i.Date.Month == month)
             .ToListAsync();
@@ -220,17 +219,16 @@ public class DashboardController(AppDbContext db, AlertService alerts) : BaseCon
 
         var totalIncome = salary + otherIncome;
         var totalExp = expenses.Sum(e => e.Amount);
-        var paidMap = await db.PaidMapAsync(UserId, expenses, year, month);
-        var paidExp = expenses.Where(e => paidMap.ContainsKey(e.Id)).Sum(e => e.Amount);
         var totalInv = investments.Sum(i => i.Amount);
         var goalDeposits = await db.GoalDeposits
             .Where(d => d.UserId == UserId && d.Date.Year == year && d.Date.Month == month)
             .SumAsync(d => (decimal?)d.Amount) ?? 0;
         var balance = totalIncome - totalExp - totalInv - goalDeposits;
+        var projectedBalance = balance - monthExp.Pending;
         var pct = totalIncome > 0 ? Math.Round(totalExp / totalIncome * 100, 1) : 0;
 
         var budgetDto = new BudgetDto(budget?.Id ?? 0, year, month, salary, totalExp, totalInv, balance, pct, otherIncome, totalIncome, goalDeposits,
-            paidExp, totalExp - paidExp);
+            totalExp, monthExp.Pending, projectedBalance);
 
 
         var catSummaries = expenses
@@ -248,7 +246,7 @@ public class DashboardController(AppDbContext db, AlertService alerts) : BaseCon
         {
             var d = new DateTime(year, month, 1).AddMonths(-i);
             var b2 = await db.MonthlyBudgets.FirstOrDefaultAsync(b => b.UserId == UserId && b.Year == d.Year && b.Month == d.Month);
-            var e2 = await db.Expenses.ForMonth(UserId, d.Year, d.Month).SumAsync(e => (decimal?)e.Amount) ?? 0;
+            var e2 = (await db.MonthExpensesAsync(UserId, d.Year, d.Month)).CountedTotal;
             var v2 = await db.Investments.Where(v => v.UserId == UserId && v.Date.Year == d.Year && v.Date.Month == d.Month).SumAsync(v => (decimal?)v.Amount) ?? 0;
             var r2 = await db.Incomes.Where(r => r.UserId == UserId && r.Date.Year == d.Year && r.Date.Month == d.Month).SumAsync(r => (decimal?)r.Amount) ?? 0;
             var g2 = await db.GoalDeposits.Where(x => x.UserId == UserId && x.Date.Year == d.Year && x.Date.Month == d.Month).SumAsync(x => (decimal?)x.Amount) ?? 0;

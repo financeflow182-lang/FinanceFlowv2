@@ -3,8 +3,27 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FinancasApi.Data;
 
+// Gastos de um mês separados em: efetivos (contam no saldo) e pendentes (ainda não pagos)
+public record MonthExpenses(List<Expense> All, List<Expense> Counted, decimal Total, decimal CountedTotal, decimal Pending);
+
 public static class ExpensePaidExtensions
 {
+    // Conta no gasto do mês: o que foi pago e as compras no cartão (já gastas na data da compra).
+    // Despesas comuns e recorrentes ainda não pagas ficam como pendentes.
+    public static async Task<MonthExpenses> MonthExpensesAsync(
+        this AppDbContext db, int userId, int year, int month, bool includeCategory = false)
+    {
+        var q = db.Expenses.ForMonth(userId, year, month);
+        if (includeCategory) q = q.Include(e => e.Category);
+        var all = await q.ToListAsync();
+        var paid = await db.PaidMapAsync(userId, all, year, month);
+
+        var counted = all.Where(e => e.CreditCardId != null || paid.ContainsKey(e.Id)).ToList();
+        var total = all.Sum(e => e.Amount);
+        var countedTotal = counted.Sum(e => e.Amount);
+        return new MonthExpenses(all, counted, total, countedTotal, total - countedTotal);
+    }
+
     // Despesas pagas entre as informadas (id -> data do pagamento), considerando o mês pedido para as recorrentes:
     // - comum: IsPaid
     // - recorrente: pagamento registrado para o mês (precisa de year/month)
