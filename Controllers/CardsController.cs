@@ -305,8 +305,7 @@ public class CardsController(AppDbContext db, AlertService alerts) : BaseControl
 
         var closing = InvoiceCalculator.ClosingDate(year, month, card.ClosingDay);
         var due = InvoiceCalculator.DueDate(year, month, card.ClosingDay, card.DueDay);
-        var status = payment != null ? "paid"
-            : InvoiceCalculator.Today() > closing ? "closed" : "open";
+        var status = InvoiceCalculator.Status(InvoiceCalculator.Today(), closing, due, payment != null);
 
         return Ok(new InvoiceDto(card.Id, year, month, closing, due,
             items.Sum(e => e.Amount), status, payment?.PaidAt,
@@ -368,18 +367,15 @@ public class CardsController(AppDbContext db, AlertService alerts) : BaseControl
 
     private async Task<CardDto> ToDto(CreditCard c)
     {
-        var (year, month) = InvoiceCalculator.InvoiceFor(InvoiceCalculator.Today(), c.ClosingDay);
-
         var used = await db.UsedLimitAsync(UserId, c.Id);
-
-        var currentTotal = await InvoiceItems(c.Id, year, month).SumAsync(e => (decimal?)e.Amount) ?? 0;
+        var cur = await db.CurrentInvoiceAsync(UserId, c);
 
         return new CardDto(
             c.Id, c.BankId, c.Bank.Name, c.Bank.Color, c.Bank.Icon,
             c.Nickname, c.Brand, c.Last4,
             c.Limit, c.ClosingDay, c.DueDay, c.IsArchived,
             used, c.Limit - used,
-            year, month, currentTotal);
+            cur.Year, cur.Month, cur.Total, cur.ClosingDate, cur.DueDate, cur.Status);
     }
 
     private static InvoiceBalanceDto ToBalanceDto(Expense e) =>

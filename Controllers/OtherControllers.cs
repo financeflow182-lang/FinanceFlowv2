@@ -267,6 +267,12 @@ public class DashboardController(AppDbContext db, AlertService alerts) : BaseCon
             .OrderByDescending(g => g.CreatedAt).Take(5).ToListAsync();
         var goalDtos = goals.Select(GoalCalculator.ToDto);
 
-        return Ok(new DashboardDto(budgetDto, catSummaries, trend, unread, goalDtos));
+        var cards = await db.CreditCards.Include(c => c.Bank)
+            .Where(c => c.UserId == UserId && !c.IsArchived)
+            .OrderBy(c => c.Nickname).ToListAsync();
+        var cardInvoices = new List<InvoiceSummaryDto>();
+        foreach (var c in cards) cardInvoices.Add(await db.CurrentInvoiceAsync(UserId, c));
+
+        return Ok(new DashboardDto(budgetDto, catSummaries, trend, unread, goalDtos, cardInvoices));
     }
 }

@@ -5,13 +5,21 @@ public static class InvoiceCalculator
 {
     private static int Clamp(int year, int month, int day) => Math.Min(day, DateTime.DaysInMonth(year, month));
 
-    // Fatura identificada pelo mês de fechamento: compra até o dia de fechamento entra na fatura do mês, depois dele na do mês seguinte
+    // Fatura identificada pelo mês de fechamento. A fatura fecha no próprio dia de fechamento:
+    // compra antes desse dia entra na fatura do mês; do dia de fechamento em diante, na do mês seguinte.
     public static (int Year, int Month) InvoiceFor(DateOnly purchase, int closingDay)
     {
         var closing = Clamp(purchase.Year, purchase.Month, closingDay);
-        var d = purchase.Day <= closing ? purchase : purchase.AddMonths(1);
+        var d = purchase.Day < closing ? purchase : purchase.AddMonths(1);
         return (d.Year, d.Month);
     }
+
+    // "paid" (paga) | "overdue" (atrasada: passou o vencimento sem pagar) | "closed" (fechada, a pagar) | "open" (aberta)
+    public static string Status(DateOnly today, DateOnly closing, DateOnly due, bool paid) =>
+        paid ? "paid"
+        : today > due ? "overdue"
+        : today >= closing ? "closed"
+        : "open";
 
     public static DateOnly ClosingDate(int year, int month, int closingDay) =>
         new(year, month, Clamp(year, month, closingDay));
