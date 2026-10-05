@@ -42,7 +42,8 @@ public class ExpensesController(AppDbContext db, AlertService alerts) : BaseCont
             .Take(1000)
             .ToListAsync();
 
-        return Ok(list.Select(e => ToDto(e, year, month)));
+        var paid = await db.PaidMapAsync(UserId, list, year, month);
+        return Ok(list.Select(e => ToDto(e, year, month, paid)));
     }
 
     [HttpGet("{id}")]
@@ -52,7 +53,8 @@ public class ExpensesController(AppDbContext db, AlertService alerts) : BaseCont
             .Include(e => e.Category)
             .FirstOrDefaultAsync(e => e.Id == id && e.UserId == UserId);
 
-        return e == null ? NotFound() : Ok(ToDto(e, null, null));
+        if (e == null) return NotFound();
+        return Ok(ToDto(e, null, null, await db.PaidMapAsync(UserId, [e], null, null)));
     }
 
     [HttpPost]
@@ -68,6 +70,8 @@ public class ExpensesController(AppDbContext db, AlertService alerts) : BaseCont
             Date = req.Date,
             CategoryId = req.CategoryId,
             IsRecurring = req.IsRecurring,
+            IsPaid = req.IsPaid && !req.IsRecurring,
+            PaidAt = req.IsPaid && !req.IsRecurring ? DateTime.UtcNow : null,
             UserId = UserId
         };
 
@@ -78,7 +82,7 @@ public class ExpensesController(AppDbContext db, AlertService alerts) : BaseCont
 
         await db.Entry(expense).Reference(e => e.Category).LoadAsync();
 
-        return CreatedAtAction(nameof(Get), new { id = expense.Id }, ToDto(expense, null, null));
+        return CreatedAtAction(nameof(Get), new { id = expense.Id }, ToDto(expense, null, null, await db.PaidMapAsync(UserId, [expense], null, null)));
     }
 
     [HttpPut("{id}")]
@@ -105,7 +109,7 @@ public class ExpensesController(AppDbContext db, AlertService alerts) : BaseCont
 
         await db.Entry(expense).Reference(e => e.Category).LoadAsync();
 
-        return Ok(ToDto(expense, null, null));
+        return Ok(ToDto(expense, null, null, await db.PaidMapAsync(UserId, [expense], null, null)));
     }
 
     [HttpDelete("{id}")]
@@ -126,7 +130,76 @@ public class ExpensesController(AppDbContext db, AlertService alerts) : BaseCont
     private Task<bool> CategoryAllowed(int categoryId) =>
         db.Categories.AnyAsync(c => c.Id == categoryId && (c.IsSystem || c.UserId == UserId));
 
-    private static ExpenseDto ToDto(Expense e, int? year, int? month)
+    // Marca a despesa como paga. Recorrentes são pagas por mês (year e month obrigatórios); cartão é pago pela fatura.
+    [HttpPost("{id}/pay")]
+    public async Task<ActionResult<ExpenseDto>> Pay(int id, [FromQuery] int? year, [FromQuery] int? month)
+    {
+        var expense = await db.Expenses.Include(e => e.Category)
+            .FirstOrDefaultAsync(e => e.Id == id && e.UserId == UserId);
+        if (expense == null) return NotFound();
+
+        var error = ValidatePayable(expense, year, month);
+        if (error != null) return BadRequest(new { message = error });
+
+        if (expense.IsRecurring)
+        {
+            var exists = await db.ExpensePayments.AnyAsync(p =>
+                p.ExpenseId == id && p.Year == year!.Value && p.Month == month!.Value);
+            if (!exists)
+            {
+                db.ExpensePayments.Add(new ExpensePayment { ExpenseId = id, UserId = UserId, Year = year!.Value, Month = month!.Value });
+                try { await db.SaveChangesAsync(); } catch (DbUpdateException) { /* pagamento simultâneo: já registrado */ }
+            }
+        }
+        else if (!expense.IsPaid)
+        {
+            expense.IsPaid = true;
+            expense.PaidAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+        }
+
+        return Ok(ToDto(expense, year, month, await db.PaidMapAsync(UserId, [expense], year, month)));
+    }
+
+    [HttpDelete("{id}/pay")]
+    public async Task<ActionResult<ExpenseDto>> Unpay(int id, [FromQuery] int? year, [FromQuery] int? month)
+    {
+        var expense = await db.Expenses.Include(e => e.Category)
+            .FirstOrDefaultAsync(e => e.Id == id && e.UserId == UserId);
+        if (expense == null) return NotFound();
+
+        var error = ValidatePayable(expense, year, month);
+        if (error != null) return BadRequest(new { message = error });
+
+        if (expense.IsRecurring)
+        {
+            await db.ExpensePayments
+                .Where(p => p.ExpenseId == id && p.Year == year!.Value && p.Month == month!.Value)
+                .ExecuteDeleteAsync();
+        }
+        else if (expense.IsPaid)
+        {
+            expense.IsPaid = false;
+            expense.PaidAt = null;
+            await db.SaveChangesAsync();
+        }
+
+        return Ok(ToDto(expense, year, month, await db.PaidMapAsync(UserId, [expense], year, month)));
+    }
+
+    private static string? ValidatePayable(Expense e, int? year, int? month)
+    {
+        if (e.CreditCardId != null)
+            return "Compras no cartão são pagas pela fatura do cartão.";
+        if (!e.IsRecurring) return null;
+        if (year is null or < 2000 or > 2100 || month is null or < 1 or > 12)
+            return "Informe o ano e o mês do pagamento para despesas recorrentes.";
+        if (e.Date > new DateOnly(year.Value, month.Value, 1).AddMonths(1).AddDays(-1))
+            return "Esta despesa recorrente ainda não começou nesse mês.";
+        return null;
+    }
+
+    private static ExpenseDto ToDto(Expense e, int? year, int? month, Dictionary<int, DateTime?> paid)
     {
         var date = e.Date;
 
@@ -155,7 +228,9 @@ public class ExpensesController(AppDbContext db, AlertService alerts) : BaseCont
             e.InstallmentTotal,
             e.InstallmentGroupId,
             e.IsInvoiceBalance,
-            e.ExcludeFromBudget
+            e.ExcludeFromBudget,
+            paid.ContainsKey(e.Id),
+            paid.GetValueOrDefault(e.Id)
         );
     }
 }

@@ -70,7 +70,8 @@ public record UpsertBudgetRequest(
 public record BudgetDto(
     int Id, int Year, int Month, decimal Salary,
     decimal TotalExpenses, decimal TotalInvestments, decimal Balance,
-    decimal SpendingPercent, decimal OtherIncome, decimal TotalIncome, decimal GoalDeposits);
+    decimal SpendingPercent, decimal OtherIncome, decimal TotalIncome, decimal GoalDeposits,
+    decimal PaidExpenses, decimal PendingExpenses);
 
 
 public record CategoryDto(int Id, string Name, string Icon, string Color, bool IsSystem);
@@ -85,7 +86,8 @@ public record CreateExpenseRequest(
     [Range(0.01, Limits.MaxMoney)] decimal Amount,
     DateOnly Date,
     int CategoryId,
-    bool IsRecurring = false);
+    bool IsRecurring = false,
+    bool IsPaid = false);
 
 public record UpdateExpenseRequest(
     [Required, StringLength(200)] string Description,
@@ -107,7 +109,9 @@ public record ExpenseDto(
     int? InstallmentTotal = null,
     Guid? InstallmentGroupId = null,
     bool IsInvoiceBalance = false,
-    bool ExcludeFromBudget = false);
+    bool ExcludeFromBudget = false,
+    bool IsPaid = false,
+    DateTime? PaidAt = null);
 
 
 public static class CardBrands
