@@ -41,10 +41,8 @@ public class BudgetsController(AppDbContext db) : BaseController
     private async Task<BudgetDto> BuildDto(MonthlyBudget? b, int year, int month)
     {
         var salary = b?.Salary ?? 0;
-        var monthItems = await db.Expenses.ForMonth(UserId, year, month).ToListAsync();
-        var expenses = monthItems.Sum(e => e.Amount);
-        var paidMap = await db.PaidMapAsync(UserId, monthItems, year, month);
-        var paidExpenses = monthItems.Where(e => paidMap.ContainsKey(e.Id)).Sum(e => e.Amount);
+        var month_ = await db.MonthExpensesAsync(UserId, year, month);
+        var expenses = month_.CountedTotal;
         var investments = await db.Investments
             .Where(i => i.UserId == UserId && i.Date.Year == year && i.Date.Month == month)
             .SumAsync(i => (decimal?)i.Amount) ?? 0;
@@ -56,9 +54,10 @@ public class BudgetsController(AppDbContext db) : BaseController
             .SumAsync(d => (decimal?)d.Amount) ?? 0;
         var totalIncome = salary + otherIncome;
         var balance = totalIncome - expenses - investments - goalDeposits;
+        var projectedBalance = balance - month_.Pending;
         var pct = totalIncome > 0 ? Math.Round(expenses / totalIncome * 100, 1) : 0;
 
         return new BudgetDto(b?.Id ?? 0, year, month, salary, expenses, investments, balance, pct, otherIncome, totalIncome, goalDeposits,
-            paidExpenses, expenses - paidExpenses);
+            expenses, month_.Pending, projectedBalance);
     }
 }
