@@ -158,7 +158,15 @@ public record CardDto(
     string Nickname, string Brand, string? Last4,
     decimal Limit, int ClosingDay, int DueDay, bool IsArchived,
     decimal UsedLimit, decimal AvailableLimit,
-    int CurrentInvoiceYear, int CurrentInvoiceMonth, decimal CurrentInvoiceTotal);
+    int CurrentInvoiceYear, int CurrentInvoiceMonth, decimal CurrentInvoiceTotal,
+    DateOnly CurrentInvoiceClosingDate, DateOnly CurrentInvoiceDueDate, string CurrentInvoiceStatus);
+
+// Fatura em destaque de um cartão (usada no dashboard).
+// Status: "open" (aberta) | "closed" (fechada) | "paid" (paga) | "overdue" (atrasada)
+public record InvoiceSummaryDto(
+    int CardId, string CardNickname, string BankName, string BankColor,
+    int Year, int Month, decimal Total,
+    DateOnly ClosingDate, DateOnly DueDate, string Status, DateTime? PaidAt);
 
 public record CreateCardPurchaseRequest(
     [Required(ErrorMessage = "Informe a descrição."), StringLength(200, ErrorMessage = "A descrição deve ter no máximo 200 caracteres.")] string Description,
@@ -180,7 +188,7 @@ public record SetInvoiceBalancesRequest(
 
 public record InvoiceBalanceDto(int ExpenseId, int Year, int Month, decimal Amount, bool CountInBudget);
 
-// Status: "open" (ainda não fechou), "closed" (fechada, a pagar) ou "paid"
+// Status: "open" (aberta), "closed" (fechada, a pagar), "paid" (paga) ou "overdue" (atrasada)
 public record InvoiceDto(
     int CardId, int Year, int Month,
     DateOnly ClosingDate, DateOnly DueDate,
@@ -247,7 +255,8 @@ public record DashboardDto(
     IEnumerable<CategorySummaryDto> CategorySummaries,
     IEnumerable<MonthlyTrendDto> MonthlyTrend,
     IEnumerable<AlertDto> UnreadAlerts,
-    IEnumerable<GoalDto> ActiveGoals);
+    IEnumerable<GoalDto> ActiveGoals,
+    IEnumerable<InvoiceSummaryDto> CardInvoices);
 
 public record CategorySummaryDto(CategoryDto Category, decimal Total, decimal Percent);
 
