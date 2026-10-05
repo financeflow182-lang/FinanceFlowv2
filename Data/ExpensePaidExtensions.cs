@@ -3,8 +3,14 @@ using Microsoft.EntityFrameworkCore;
 
 namespace FinancasApi.Data;
 
-// Gastos de um mês separados em: efetivos (contam no saldo) e pendentes (ainda não pagos)
-public record MonthExpenses(List<Expense> All, List<Expense> Counted, decimal Total, decimal CountedTotal, decimal Pending);
+// Gastos de um mês:
+// - Total: todos (pagos e pendentes)
+// - PaidTotal: o que de fato já foi pago (inclui compras de cartão cuja fatura foi paga)
+// - CountedTotal: o que já saiu do saldo livre (pagos + compras no cartão, que contam na data da compra)
+public record MonthExpenses(List<Expense> All, List<Expense> Counted, decimal Total, decimal CountedTotal, decimal PaidTotal)
+{
+    public decimal Pending => Total - PaidTotal;
+}
 
 public static class ExpensePaidExtensions
 {
@@ -21,7 +27,8 @@ public static class ExpensePaidExtensions
         var counted = all.Where(e => e.CreditCardId != null || paid.ContainsKey(e.Id)).ToList();
         var total = all.Sum(e => e.Amount);
         var countedTotal = counted.Sum(e => e.Amount);
-        return new MonthExpenses(all, counted, total, countedTotal, total - countedTotal);
+        var paidTotal = all.Where(e => paid.ContainsKey(e.Id)).Sum(e => e.Amount);
+        return new MonthExpenses(all, counted, total, countedTotal, paidTotal);
     }
 
     // Despesas pagas entre as informadas (id -> data do pagamento), considerando o mês pedido para as recorrentes:

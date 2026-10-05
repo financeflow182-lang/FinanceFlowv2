@@ -208,7 +208,7 @@ public class DashboardController(AppDbContext db, AlertService alerts) : BaseCon
         var salary = budget?.Salary ?? 0;
 
         var monthExp = await db.MonthExpensesAsync(UserId, year, month, includeCategory: true);
-        var expenses = monthExp.Counted;
+        var expenses = monthExp.All;
         var investments = await db.Investments
             .Where(i => i.UserId == UserId && i.Date.Year == year && i.Date.Month == month)
             .ToListAsync();
@@ -218,17 +218,18 @@ public class DashboardController(AppDbContext db, AlertService alerts) : BaseCon
             .SumAsync(i => (decimal?)i.Amount) ?? 0;
 
         var totalIncome = salary + otherIncome;
-        var totalExp = expenses.Sum(e => e.Amount);
+        var totalExp = monthExp.Total;
         var totalInv = investments.Sum(i => i.Amount);
         var goalDeposits = await db.GoalDeposits
             .Where(d => d.UserId == UserId && d.Date.Year == year && d.Date.Month == month)
             .SumAsync(d => (decimal?)d.Amount) ?? 0;
-        var balance = totalIncome - totalExp - totalInv - goalDeposits;
-        var projectedBalance = balance - monthExp.Pending;
+        // Depósitos em metas ficam só como informação: não descontam do saldo livre
+        var balance = totalIncome - monthExp.CountedTotal - totalInv;
+        var projectedBalance = totalIncome - totalExp - totalInv;
         var pct = totalIncome > 0 ? Math.Round(totalExp / totalIncome * 100, 1) : 0;
 
         var budgetDto = new BudgetDto(budget?.Id ?? 0, year, month, salary, totalExp, totalInv, balance, pct, otherIncome, totalIncome, goalDeposits,
-            totalExp, monthExp.Pending, projectedBalance);
+            monthExp.PaidTotal, monthExp.Pending, projectedBalance);
 
 
         var catSummaries = expenses
@@ -246,12 +247,13 @@ public class DashboardController(AppDbContext db, AlertService alerts) : BaseCon
         {
             var d = new DateTime(year, month, 1).AddMonths(-i);
             var b2 = await db.MonthlyBudgets.FirstOrDefaultAsync(b => b.UserId == UserId && b.Year == d.Year && b.Month == d.Month);
-            var e2 = (await db.MonthExpensesAsync(UserId, d.Year, d.Month)).CountedTotal;
+            var m2 = await db.MonthExpensesAsync(UserId, d.Year, d.Month);
+            var e2 = m2.Total;
             var v2 = await db.Investments.Where(v => v.UserId == UserId && v.Date.Year == d.Year && v.Date.Month == d.Month).SumAsync(v => (decimal?)v.Amount) ?? 0;
             var r2 = await db.Incomes.Where(r => r.UserId == UserId && r.Date.Year == d.Year && r.Date.Month == d.Month).SumAsync(r => (decimal?)r.Amount) ?? 0;
             var g2 = await db.GoalDeposits.Where(x => x.UserId == UserId && x.Date.Year == d.Year && x.Date.Month == d.Month).SumAsync(x => (decimal?)x.Amount) ?? 0;
             var s2 = b2?.Salary ?? 0;
-            trend.Add(new MonthlyTrendDto(d.Year, d.Month, $"{months[d.Month - 1]}/{d.Year % 100:00}", s2, e2, v2, s2 + r2 - e2 - v2 - g2, r2, g2));
+            trend.Add(new MonthlyTrendDto(d.Year, d.Month, $"{months[d.Month - 1]}/{d.Year % 100:00}", s2, e2, v2, s2 + r2 - m2.CountedTotal - v2, r2, g2));
         }
 
 

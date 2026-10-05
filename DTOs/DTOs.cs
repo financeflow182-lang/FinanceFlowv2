@@ -66,8 +66,8 @@ public record UpsertBudgetRequest(
     [Range(1, 12)] int Month,
     [Range(0, Limits.MaxMoney)] decimal Salary);
 
-// TotalExpenses = gastos efetivos (pagos + compras no cartão); PendingExpenses = ainda não pagos.
-// Balance usa só os efetivos; ProjectedBalance considera também os pendentes.
+// TotalExpenses = todos os gastos do mês (pagos e pendentes); PaidExpenses = já pago; PendingExpenses = falta pagar.
+// Balance desconta só o que já saiu (pagos + compras no cartão); ProjectedBalance desconta também o pendente.
 // Salary = salário base; OtherIncome = receitas lançadas; TotalIncome = Salary + OtherIncome
 public record BudgetDto(
     int Id, int Year, int Month, decimal Salary,
