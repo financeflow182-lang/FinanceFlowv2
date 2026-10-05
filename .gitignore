@@ -24,3 +24,6 @@ appsettings.*.json
 
 # Guia de mudanças do frontend
 FRONTEND_RECEITAS.md
+
+# Imagens de referência (só para consulta local)
+images/
