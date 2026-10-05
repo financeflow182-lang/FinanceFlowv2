@@ -192,7 +192,7 @@ public class CardsController(AppDbContext db, AlertService alerts) : BaseControl
         await db.SaveChangesAsync();
 
         await alerts.CheckCardAlertsAsync(UserId);
-        return Ok(expenses.Select(ToExpenseDto));
+        return Ok(expenses.Select(e => ToExpenseDto(e)));
     }
 
     // Exclui todas as parcelas de uma compra parcelada
@@ -309,7 +309,8 @@ public class CardsController(AppDbContext db, AlertService alerts) : BaseControl
             : InvoiceCalculator.Today() > closing ? "closed" : "open";
 
         return Ok(new InvoiceDto(card.Id, year, month, closing, due,
-            items.Sum(e => e.Amount), status, payment?.PaidAt, items.Select(ToExpenseDto)));
+            items.Sum(e => e.Amount), status, payment?.PaidAt,
+            items.Select(e => ToExpenseDto(e, payment != null, payment?.PaidAt))));
     }
 
     [HttpPost("{id}/invoices/{year:int}/{month:int}/pay")]
@@ -384,9 +385,9 @@ public class CardsController(AppDbContext db, AlertService alerts) : BaseControl
     private static InvoiceBalanceDto ToBalanceDto(Expense e) =>
         new(e.Id, e.InvoiceYear!.Value, e.InvoiceMonth!.Value, e.Amount, !e.ExcludeFromBudget);
 
-    private static ExpenseDto ToExpenseDto(Expense e) => new(
+    private static ExpenseDto ToExpenseDto(Expense e, bool isPaid = false, DateTime? paidAt = null) => new(
         e.Id, e.Description, e.Amount, e.Date,
         new CategoryDto(e.Category.Id, e.Category.Name, e.Category.Icon, e.Category.Color, e.Category.IsSystem),
         e.IsRecurring, e.CreatedAt, e.CreditCardId, e.InstallmentNumber, e.InstallmentTotal, e.InstallmentGroupId,
-        e.IsInvoiceBalance, e.ExcludeFromBudget);
+        e.IsInvoiceBalance, e.ExcludeFromBudget, isPaid, paidAt);
 }

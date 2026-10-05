@@ -73,8 +73,24 @@ public class Expense
     public int? InstallmentTotal { get; set; }
 
     // Saldo de fatura já existente (lançado em bloco); pode ficar fora do orçamento do mês para não duplicar gastos
+    // Pagamento de despesas comuns (fora de cartão); recorrentes são pagas mês a mês em ExpensePayment
+    public bool IsPaid { get; set; }
+    public DateTime? PaidAt { get; set; }
+
     public bool IsInvoiceBalance { get; set; }
     public bool ExcludeFromBudget { get; set; }
+}
+
+// Pagamento de uma despesa recorrente em um mês específico
+public class ExpensePayment
+{
+    public int Id { get; set; }
+    public int ExpenseId { get; set; }
+    public Expense Expense { get; set; } = null!;
+    public int UserId { get; set; }
+    public int Year { get; set; }
+    public int Month { get; set; }
+    public DateTime PaidAt { get; set; } = DateTime.UtcNow;
 }
 
 public class Bank

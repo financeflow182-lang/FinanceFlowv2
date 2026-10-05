@@ -10,6 +10,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<MonthlyBudget> MonthlyBudgets => Set<MonthlyBudget>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<Expense> Expenses => Set<Expense>();
+    public DbSet<ExpensePayment> ExpensePayments => Set<ExpensePayment>();
     public DbSet<Bank> Banks => Set<Bank>();
     public DbSet<CreditCard> CreditCards => Set<CreditCard>();
     public DbSet<InvoicePayment> InvoicePayments => Set<InvoicePayment>();
@@ -45,6 +46,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             e.HasOne(x => x.Category).WithMany(c => c.Expenses).OnDelete(DeleteBehavior.Restrict);
             e.HasOne(x => x.CreditCard).WithMany().HasForeignKey(x => x.CreditCardId).OnDelete(DeleteBehavior.Restrict);
             e.HasIndex(x => new { x.CreditCardId, x.InvoiceYear, x.InvoiceMonth });
+        });
+
+        mb.Entity<ExpensePayment>(e => {
+            e.HasOne(x => x.Expense).WithMany().HasForeignKey(x => x.ExpenseId).OnDelete(DeleteBehavior.Cascade);
+            e.HasIndex(x => new { x.ExpenseId, x.Year, x.Month }).IsUnique();
         });
 
         // Cartão de crédito

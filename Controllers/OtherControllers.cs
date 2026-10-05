@@ -220,6 +220,8 @@ public class DashboardController(AppDbContext db, AlertService alerts) : BaseCon
 
         var totalIncome = salary + otherIncome;
         var totalExp = expenses.Sum(e => e.Amount);
+        var paidMap = await db.PaidMapAsync(UserId, expenses, year, month);
+        var paidExp = expenses.Where(e => paidMap.ContainsKey(e.Id)).Sum(e => e.Amount);
         var totalInv = investments.Sum(i => i.Amount);
         var goalDeposits = await db.GoalDeposits
             .Where(d => d.UserId == UserId && d.Date.Year == year && d.Date.Month == month)
@@ -227,7 +229,8 @@ public class DashboardController(AppDbContext db, AlertService alerts) : BaseCon
         var balance = totalIncome - totalExp - totalInv - goalDeposits;
         var pct = totalIncome > 0 ? Math.Round(totalExp / totalIncome * 100, 1) : 0;
 
-        var budgetDto = new BudgetDto(budget?.Id ?? 0, year, month, salary, totalExp, totalInv, balance, pct, otherIncome, totalIncome, goalDeposits);
+        var budgetDto = new BudgetDto(budget?.Id ?? 0, year, month, salary, totalExp, totalInv, balance, pct, otherIncome, totalIncome, goalDeposits,
+            paidExp, totalExp - paidExp);
 
 
         var catSummaries = expenses
