@@ -223,7 +223,8 @@ public class DashboardController(AppDbContext db, AlertService alerts) : BaseCon
         var goalDeposits = await db.GoalDeposits
             .Where(d => d.UserId == UserId && d.Date.Year == year && d.Date.Month == month)
             .SumAsync(d => (decimal?)d.Amount) ?? 0;
-        var balance = totalIncome - totalExp - totalInv - goalDeposits;
+        // Depósitos em metas ficam só como informação: não descontam do saldo livre
+        var balance = totalIncome - totalExp - totalInv;
         var projectedBalance = balance - monthExp.Pending;
         var pct = totalIncome > 0 ? Math.Round(totalExp / totalIncome * 100, 1) : 0;
 
@@ -251,7 +252,7 @@ public class DashboardController(AppDbContext db, AlertService alerts) : BaseCon
             var r2 = await db.Incomes.Where(r => r.UserId == UserId && r.Date.Year == d.Year && r.Date.Month == d.Month).SumAsync(r => (decimal?)r.Amount) ?? 0;
             var g2 = await db.GoalDeposits.Where(x => x.UserId == UserId && x.Date.Year == d.Year && x.Date.Month == d.Month).SumAsync(x => (decimal?)x.Amount) ?? 0;
             var s2 = b2?.Salary ?? 0;
-            trend.Add(new MonthlyTrendDto(d.Year, d.Month, $"{months[d.Month - 1]}/{d.Year % 100:00}", s2, e2, v2, s2 + r2 - e2 - v2 - g2, r2, g2));
+            trend.Add(new MonthlyTrendDto(d.Year, d.Month, $"{months[d.Month - 1]}/{d.Year % 100:00}", s2, e2, v2, s2 + r2 - e2 - v2, r2, g2));
         }
 
 
