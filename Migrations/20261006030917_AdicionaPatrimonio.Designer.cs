@@ -4,6 +4,7 @@ using FinancasApi.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FinancasApi.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261006030917_AdicionaPatrimonio")]
+    partial class AdicionaPatrimonio
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -56,54 +59,6 @@ namespace FinancasApi.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("Alerts");
-                });
-
-            modelBuilder.Entity("FinancasApi.Models.Asset", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("int");
-
-                    MySqlPropertyBuilderExtensions.UseMySqlIdentityColumn(b.Property<int>("Id"));
-
-                    b.Property<DateOnly>("AcquisitionDate")
-                        .HasColumnType("date");
-
-                    b.Property<decimal?>("AnnualDepreciationPercent")
-                        .HasColumnType("numeric(5,2)");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("datetime(6)");
-
-                    b.Property<decimal>("InitialValue")
-                        .HasColumnType("numeric(18,2)");
-
-                    b.Property<bool>("IsArchived")
-                        .HasColumnType("tinyint(1)");
-
-                    b.Property<string>("Kind")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("varchar(20)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("varchar(100)");
-
-                    b.Property<string>("Type")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("varchar(50)");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("int");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId");
-
-                    b.ToTable("Assets");
                 });
 
             modelBuilder.Entity("FinancasApi.Models.Bank", b =>
@@ -697,9 +652,6 @@ namespace FinancasApi.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("numeric(18,2)");
 
-                    b.Property<int?>("AssetId")
-                        .HasColumnType("int");
-
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime(6)");
 
@@ -721,8 +673,6 @@ namespace FinancasApi.Migrations
                         .HasColumnType("int");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("AssetId");
 
                     b.HasIndex("UserId");
 
@@ -868,17 +818,6 @@ namespace FinancasApi.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("FinancasApi.Models.Asset", b =>
-                {
-                    b.HasOne("FinancasApi.Models.User", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("FinancasApi.Models.CreditCard", b =>
                 {
                     b.HasOne("FinancasApi.Models.Bank", "Bank")
@@ -969,18 +908,11 @@ namespace FinancasApi.Migrations
 
             modelBuilder.Entity("FinancasApi.Models.Investment", b =>
                 {
-                    b.HasOne("FinancasApi.Models.Asset", "Asset")
-                        .WithMany()
-                        .HasForeignKey("AssetId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("FinancasApi.Models.User", "User")
                         .WithMany("Investments")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
-
-                    b.Navigation("Asset");
 
                     b.Navigation("User");
                 });

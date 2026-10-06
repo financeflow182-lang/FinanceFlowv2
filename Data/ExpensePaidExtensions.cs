@@ -6,7 +6,8 @@ namespace FinancasApi.Data;
 // Gastos de um mês:
 // - Total: todos (pagos e pendentes)
 // - PaidTotal: o que de fato já foi pago (inclui compras de cartão cuja fatura foi paga)
-// - CountedTotal: o que já saiu do saldo livre (pagos + compras no cartão, que contam na data da compra)
+// - CountedTotal: gastos fora do cartão já pagos, que saem do saldo livre. Compras no cartão só saem do saldo
+//   quando a fatura é paga (ver InvoicePaymentsInMonthAsync).
 public record MonthExpenses(List<Expense> All, List<Expense> Counted, decimal Total, decimal CountedTotal, decimal PaidTotal)
 {
     public decimal Pending => Total - PaidTotal;
@@ -14,8 +15,7 @@ public record MonthExpenses(List<Expense> All, List<Expense> Counted, decimal To
 
 public static class ExpensePaidExtensions
 {
-    // Conta no gasto do mês: o que foi pago e as compras no cartão (já gastas na data da compra).
-    // Despesas comuns e recorrentes ainda não pagas ficam como pendentes.
+    // Despesas comuns e recorrentes ainda não pagas ficam como pendentes; compras no cartão dependem da fatura.
     public static async Task<MonthExpenses> MonthExpensesAsync(
         this AppDbContext db, int userId, int year, int month, bool includeCategory = false)
     {
@@ -24,11 +24,21 @@ public static class ExpensePaidExtensions
         var all = await q.ToListAsync();
         var paid = await db.PaidMapAsync(userId, all, year, month);
 
-        var counted = all.Where(e => e.CreditCardId != null || paid.ContainsKey(e.Id)).ToList();
+        var counted = all.Where(e => e.CreditCardId == null && paid.ContainsKey(e.Id)).ToList();
         var total = all.Sum(e => e.Amount);
         var countedTotal = counted.Sum(e => e.Amount);
         var paidTotal = all.Where(e => paid.ContainsKey(e.Id)).Sum(e => e.Amount);
         return new MonthExpenses(all, counted, total, countedTotal, paidTotal);
+    }
+
+    // Total de faturas de cartão pagas no mês (pela data do pagamento, no horário de Brasília): dinheiro que saiu do saldo
+    public static async Task<decimal> InvoicePaymentsInMonthAsync(this AppDbContext db, int userId, int year, int month)
+    {
+        var start = new DateTime(year, month, 1, 0, 0, 0, DateTimeKind.Utc).AddHours(3);
+        var end = start.AddMonths(1);
+        return await db.InvoicePayments
+            .Where(p => p.UserId == userId && p.PaidAt >= start && p.PaidAt < end)
+            .SumAsync(p => (decimal?)p.Amount) ?? 0;
     }
 
     // Despesas pagas entre as informadas (id -> data do pagamento), considerando o mês pedido para as recorrentes:
