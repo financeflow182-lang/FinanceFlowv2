@@ -208,10 +208,18 @@ public record UpdateIncomeRequest(
     DateOnly Date);
 public record IncomeDto(int Id, string Description, string Category, decimal Amount, DateOnly Date, DateTime CreatedAt);
 
-public record CreateInvestmentRequest([Required, StringLength(100)] string Name, [Required, StringLength(50)] string Type, [Range(0.01, Limits.MaxMoney)] decimal Amount, DateOnly Date);
-public record UpdateInvestmentRequest([Required, StringLength(100)] string Name, [Required, StringLength(50)] string Type, [Range(0.01, Limits.MaxMoney)] decimal Amount, DateOnly Date);
+public record CreateInvestmentRequest([Required, StringLength(100)] string Name, [Required, StringLength(50)] string Type, [Range(0.01, Limits.MaxMoney)] decimal Amount, DateOnly Date, bool IsExistingBalance = false);
+public record UpdateInvestmentRequest([Required, StringLength(100)] string Name, [Required, StringLength(50)] string Type, [Range(0.01, Limits.MaxMoney)] decimal Amount, DateOnly Date, bool IsExistingBalance = false);
 
-public record InvestmentDto(int Id, string Name, string Type, decimal Amount, DateOnly Date, DateTime CreatedAt);
+public record InvestmentDto(int Id, string Name, string Type, decimal Amount, DateOnly Date, DateTime CreatedAt, bool IsExistingBalance = false);
+
+public record InvestmentTypeTotalDto(string Type, decimal Total);
+
+// TotalPatrimony = ExistingBalance + TotalContributions (investimentos com data até hoje)
+// MonthContributions = aportes feitos no mês consultado (os que saem do saldo livre)
+public record InvestmentSummaryDto(
+    decimal TotalPatrimony, decimal ExistingBalance, decimal TotalContributions,
+    decimal MonthContributions, IEnumerable<InvestmentTypeTotalDto> ByType);
 
 
 public record CreateGoalRequest(
@@ -257,7 +265,8 @@ public record DashboardDto(
     IEnumerable<MonthlyTrendDto> MonthlyTrend,
     IEnumerable<AlertDto> UnreadAlerts,
     IEnumerable<GoalDto> ActiveGoals,
-    IEnumerable<InvoiceSummaryDto> CardInvoices);
+    IEnumerable<InvoiceSummaryDto> CardInvoices,
+    decimal TotalPatrimony);
 
 public record CategorySummaryDto(CategoryDto Category, decimal Total, decimal Percent);
 

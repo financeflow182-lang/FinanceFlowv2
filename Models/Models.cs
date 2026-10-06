@@ -147,6 +147,8 @@ public class Income
 
 public class Investment
 {
+    // Patrimônio que o usuário já tinha: soma no patrimônio, mas não sai do saldo livre do mês
+    public bool IsExistingBalance { get; set; }
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Type { get; set; } = string.Empty;
