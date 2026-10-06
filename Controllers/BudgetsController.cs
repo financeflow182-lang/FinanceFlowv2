@@ -54,8 +54,9 @@ public class BudgetsController(AppDbContext db) : BaseController
             .SumAsync(d => (decimal?)d.Amount) ?? 0;
         var totalIncome = salary + otherIncome;
         // Depósitos em metas ficam só como informação: não descontam do saldo livre
-        var balance = totalIncome - month_.CountedTotal - investments;
-        var projectedBalance = totalIncome - expenses - investments;
+        var invoicesPaid = await db.InvoicePaymentsInMonthAsync(UserId, year, month);
+        var balance = totalIncome - month_.CountedTotal - invoicesPaid - investments;
+        var projectedBalance = balance - month_.Pending;
         var pct = totalIncome > 0 ? Math.Round(expenses / totalIncome * 100, 1) : 0;
 
         return new BudgetDto(b?.Id ?? 0, year, month, salary, expenses, investments, balance, pct, otherIncome, totalIncome, goalDeposits,

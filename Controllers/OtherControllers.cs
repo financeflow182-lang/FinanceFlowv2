@@ -224,8 +224,9 @@ public class DashboardController(AppDbContext db, AlertService alerts) : BaseCon
             .Where(d => d.UserId == UserId && d.Date.Year == year && d.Date.Month == month)
             .SumAsync(d => (decimal?)d.Amount) ?? 0;
         // Depósitos em metas ficam só como informação: não descontam do saldo livre
-        var balance = totalIncome - monthExp.CountedTotal - totalInv;
-        var projectedBalance = totalIncome - totalExp - totalInv;
+        var invoicesPaid = await db.InvoicePaymentsInMonthAsync(UserId, year, month);
+        var balance = totalIncome - monthExp.CountedTotal - invoicesPaid - totalInv;
+        var projectedBalance = balance - monthExp.Pending;
         var pct = totalIncome > 0 ? Math.Round(totalExp / totalIncome * 100, 1) : 0;
 
         var budgetDto = new BudgetDto(budget?.Id ?? 0, year, month, salary, totalExp, totalInv, balance, pct, otherIncome, totalIncome, goalDeposits,
@@ -249,11 +250,12 @@ public class DashboardController(AppDbContext db, AlertService alerts) : BaseCon
             var b2 = await db.MonthlyBudgets.FirstOrDefaultAsync(b => b.UserId == UserId && b.Year == d.Year && b.Month == d.Month);
             var m2 = await db.MonthExpensesAsync(UserId, d.Year, d.Month);
             var e2 = m2.Total;
+            var p2 = await db.InvoicePaymentsInMonthAsync(UserId, d.Year, d.Month);
             var v2 = await db.Investments.Where(v => v.UserId == UserId && v.Date.Year == d.Year && v.Date.Month == d.Month).SumAsync(v => (decimal?)v.Amount) ?? 0;
             var r2 = await db.Incomes.Where(r => r.UserId == UserId && r.Date.Year == d.Year && r.Date.Month == d.Month).SumAsync(r => (decimal?)r.Amount) ?? 0;
             var g2 = await db.GoalDeposits.Where(x => x.UserId == UserId && x.Date.Year == d.Year && x.Date.Month == d.Month).SumAsync(x => (decimal?)x.Amount) ?? 0;
             var s2 = b2?.Salary ?? 0;
-            trend.Add(new MonthlyTrendDto(d.Year, d.Month, $"{months[d.Month - 1]}/{d.Year % 100:00}", s2, e2, v2, s2 + r2 - m2.CountedTotal - v2, r2, g2));
+            trend.Add(new MonthlyTrendDto(d.Year, d.Month, $"{months[d.Month - 1]}/{d.Year % 100:00}", s2, e2, v2, s2 + r2 - m2.CountedTotal - p2 - v2, r2, g2));
         }
 
 
