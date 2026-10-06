@@ -208,18 +208,57 @@ public record UpdateIncomeRequest(
     DateOnly Date);
 public record IncomeDto(int Id, string Description, string Category, decimal Amount, DateOnly Date, DateTime CreatedAt);
 
-public record CreateInvestmentRequest([Required, StringLength(100)] string Name, [Required, StringLength(50)] string Type, [Range(0.01, Limits.MaxMoney)] decimal Amount, DateOnly Date, bool IsExistingBalance = false);
-public record UpdateInvestmentRequest([Required, StringLength(100)] string Name, [Required, StringLength(50)] string Type, [Range(0.01, Limits.MaxMoney)] decimal Amount, DateOnly Date, bool IsExistingBalance = false);
+public record CreateInvestmentRequest([Required, StringLength(100)] string Name, [Required, StringLength(50)] string Type, [Range(0.01, Limits.MaxMoney)] decimal Amount, DateOnly Date, bool IsExistingBalance = false, int? AssetId = null);
+public record UpdateInvestmentRequest([Required, StringLength(100)] string Name, [Required, StringLength(50)] string Type, [Range(0.01, Limits.MaxMoney)] decimal Amount, DateOnly Date, bool IsExistingBalance = false, int? AssetId = null);
 
-public record InvestmentDto(int Id, string Name, string Type, decimal Amount, DateOnly Date, DateTime CreatedAt, bool IsExistingBalance = false);
+public record InvestmentDto(int Id, string Name, string Type, decimal Amount, DateOnly Date, DateTime CreatedAt, bool IsExistingBalance = false, int? AssetId = null, string? AssetName = null);
+
+public static class AssetTypes
+{
+    public const string Investment = "investment";
+    public const string Depreciable = "depreciable";
+
+    public static readonly string[] InvestmentTypes =
+        ["CDB", "Tesouro Direto", "Poupança", "LCI/LCA", "Ações", "FIIs", "Fundos", "Previdência", "Criptomoedas", "Outro investimento"];
+    public static readonly string[] DepreciableTypes =
+        ["Carro", "Moto", "Imóvel", "Eletrônicos", "Outro bem"];
+
+    public static bool IsValid(string kind, string type) =>
+        kind == Investment ? InvestmentTypes.Contains(type)
+        : kind == Depreciable && DepreciableTypes.Contains(type);
+}
+
+public record AssetTypesDto(IEnumerable<string> Investment, IEnumerable<string> Depreciable);
+
+public record CreateAssetRequest(
+    [Required(ErrorMessage = "Informe o nome do item."), StringLength(100, MinimumLength = 2, ErrorMessage = "O nome deve ter entre 2 e 100 caracteres.")] string Name,
+    [Required(ErrorMessage = "Informe o tipo de patrimônio.")] string Kind,
+    [Required(ErrorMessage = "Informe o tipo.")] string Type,
+    [Range(0, Limits.MaxMoney, ErrorMessage = "Informe um valor inicial válido.")] decimal InitialValue,
+    DateOnly AcquisitionDate,
+    [Range(-100, 100, ErrorMessage = "A depreciação anual deve estar entre -100% e 100%.")] decimal? AnnualDepreciationPercent = null);
+
+public record UpdateAssetRequest(
+    [Required(ErrorMessage = "Informe o nome do item."), StringLength(100, MinimumLength = 2, ErrorMessage = "O nome deve ter entre 2 e 100 caracteres.")] string Name,
+    [Required(ErrorMessage = "Informe o tipo.")] string Type,
+    [Range(0, Limits.MaxMoney, ErrorMessage = "Informe um valor inicial válido.")] decimal InitialValue,
+    DateOnly AcquisitionDate,
+    [Range(-100, 100, ErrorMessage = "A depreciação anual deve estar entre -100% e 100%.")] decimal? AnnualDepreciationPercent,
+    bool IsArchived);
+
+// Kind: "investment" | "depreciable". CurrentValue = valor inicial (depreciado, nos bens) + aportes até hoje.
+public record AssetDto(
+    int Id, string Name, string Kind, string Type,
+    decimal InitialValue, DateOnly AcquisitionDate, decimal? AnnualDepreciationPercent, bool IsArchived,
+    decimal Contributions, decimal CurrentValue, DateTime CreatedAt);
 
 public record InvestmentTypeTotalDto(string Type, decimal Total);
 
-// TotalPatrimony = ExistingBalance + TotalContributions (investimentos com data até hoje)
+// TotalPatrimony = TotalInvested + TotalDepreciable (itens ativos + aportes sem item vinculado, com data até hoje)
 // MonthContributions = aportes feitos no mês consultado (os que saem do saldo livre)
 public record InvestmentSummaryDto(
-    decimal TotalPatrimony, decimal ExistingBalance, decimal TotalContributions,
-    decimal MonthContributions, IEnumerable<InvestmentTypeTotalDto> ByType);
+    decimal TotalPatrimony, decimal TotalInvested, decimal TotalDepreciable,
+    decimal MonthContributions, IEnumerable<InvestmentTypeTotalDto> ByType, IEnumerable<AssetDto> Assets);
 
 
 public record CreateGoalRequest(

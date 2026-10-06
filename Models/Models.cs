@@ -145,8 +145,26 @@ public class Income
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
+// Item do patrimônio: um investimento (CDB, Tesouro...) ou um bem que perde valor (carro, imóvel...)
+public class Asset
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Kind { get; set; } = string.Empty;   // "investment" | "depreciable"
+    public string Type { get; set; } = string.Empty;
+    public decimal InitialValue { get; set; }          // valor que já existia ao cadastrar; não sai do saldo livre
+    public DateOnly AcquisitionDate { get; set; }
+    public decimal? AnnualDepreciationPercent { get; set; }  // só para bens; negativo = valorização
+    public bool IsArchived { get; set; }
+    public int UserId { get; set; }
+    public User User { get; set; } = null!;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+}
+
 public class Investment
 {
+    public int? AssetId { get; set; }
+    public Asset? Asset { get; set; }
     // Patrimônio que o usuário já tinha: soma no patrimônio, mas não sai do saldo livre do mês
     public bool IsExistingBalance { get; set; }
     public int Id { get; set; }

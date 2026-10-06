@@ -43,14 +43,14 @@ public class InvestmentsController(AppDbContext db) : BaseController
     public async Task<ActionResult<IEnumerable<InvestmentDto>>> List(
         [FromQuery, Range(2000, 2100)] int? year, [FromQuery, Range(1, 12)] int? month)
     {
-        var q = db.Investments.Where(i => i.UserId == UserId);
+        var q = db.Investments.Include(i => i.Asset).Where(i => i.UserId == UserId);
         if (year.HasValue) q = q.Where(i => i.Date.Year == year.Value);
         if (month.HasValue) q = q.Where(i => i.Date.Month == month.Value);
         var list = await q.OrderByDescending(i => i.Date).Take(1000).ToListAsync();
         return Ok(list.Select(ToDto));
     }
 
-    // Patrimônio total (investimentos com data até hoje) e aportes do mês
+    // Patrimônio total (itens ativos mais aportes sem item) e aportes do mês
     [HttpGet("summary")]
     public async Task<ActionResult<InvestmentSummaryDto>> Summary(
         [FromQuery, Range(2000, 2100)] int? year, [FromQuery, Range(1, 12)] int? month)
@@ -59,25 +59,37 @@ public class InvestmentsController(AppDbContext db) : BaseController
         var y = year ?? today.Year;
         var m = month ?? today.Month;
 
-        var items = await db.Investments
-            .Where(i => i.UserId == UserId && i.Date <= today)
-            .ToListAsync();
+        var assets = await AssetCalculator.ListAsync(db, UserId, includeArchived: false);
+        var unlinked = await AssetCalculator.UnlinkedInvestedAsync(db, UserId);
 
-        var existing = items.Where(i => i.IsExistingBalance).Sum(i => i.Amount);
-        var contributions = items.Where(i => !i.IsExistingBalance).Sum(i => i.Amount);
-        var monthContributions = items
-            .Where(i => !i.IsExistingBalance && i.Date.Year == y && i.Date.Month == m).Sum(i => i.Amount);
-        var byType = items.GroupBy(i => i.Type)
-            .Select(g => new InvestmentTypeTotalDto(g.Key, g.Sum(i => i.Amount)))
-            .OrderByDescending(t => t.Total);
+        var invested = assets.Where(a => a.Kind == AssetTypes.Investment).Sum(a => a.CurrentValue) + unlinked;
+        var depreciable = assets.Where(a => a.Kind == AssetTypes.Depreciable).Sum(a => a.CurrentValue);
 
-        return Ok(new InvestmentSummaryDto(existing + contributions, existing, contributions, monthContributions, byType));
+        var monthContributions = await db.Investments
+            .Where(i => i.UserId == UserId && !i.IsExistingBalance && i.Date <= today && i.Date.Year == y && i.Date.Month == m)
+            .SumAsync(i => (decimal?)i.Amount) ?? 0;
+
+        var byType = assets.GroupBy(a => a.Type).Select(g => new InvestmentTypeTotalDto(g.Key, g.Sum(a => a.CurrentValue))).ToList();
+        if (unlinked > 0) byType.Add(new InvestmentTypeTotalDto("Sem item vinculado", unlinked));
+
+        return Ok(new InvestmentSummaryDto(invested + depreciable, invested, depreciable, monthContributions,
+            byType.OrderByDescending(t => t.Total), assets));
     }
 
     [HttpPost]
     public async Task<ActionResult<InvestmentDto>> Create(CreateInvestmentRequest req)
     {
-        var inv = new Investment { Name = req.Name, Type = req.Type, Amount = req.Amount, Date = req.Date, IsExistingBalance = req.IsExistingBalance, UserId = UserId };
+        var asset = await FindAsset(req.AssetId);
+        if (req.AssetId.HasValue && asset == null)
+            return BadRequest(new { message = "Item de patrimônio inválido." });
+        if (asset is { IsArchived: true })
+            return BadRequest(new { message = "Este item de patrimônio está arquivado." });
+
+        var inv = new Investment
+        {
+            Name = req.Name, Type = asset?.Type ?? req.Type, Amount = req.Amount, Date = req.Date,
+            IsExistingBalance = req.IsExistingBalance, AssetId = asset?.Id, Asset = asset, UserId = UserId
+        };
         db.Investments.Add(inv);
         await db.SaveChangesAsync();
         return Ok(ToDto(inv));
@@ -86,9 +98,17 @@ public class InvestmentsController(AppDbContext db) : BaseController
     [HttpPut("{id}")]
     public async Task<ActionResult<InvestmentDto>> Update(int id, UpdateInvestmentRequest req)
     {
-        var inv = await db.Investments.FirstOrDefaultAsync(i => i.Id == id && i.UserId == UserId);
+        var inv = await db.Investments.Include(i => i.Asset).FirstOrDefaultAsync(i => i.Id == id && i.UserId == UserId);
         if (inv == null) return NotFound();
-        inv.Name = req.Name; inv.Type = req.Type; inv.Amount = req.Amount; inv.Date = req.Date; inv.IsExistingBalance = req.IsExistingBalance;
+
+        var asset = await FindAsset(req.AssetId);
+        if (req.AssetId.HasValue && asset == null)
+            return BadRequest(new { message = "Item de patrimônio inválido." });
+        if (asset is { IsArchived: true } && inv.AssetId != asset.Id)
+            return BadRequest(new { message = "Este item de patrimônio está arquivado." });
+
+        inv.Name = req.Name; inv.Type = asset?.Type ?? req.Type; inv.Amount = req.Amount; inv.Date = req.Date;
+        inv.IsExistingBalance = req.IsExistingBalance; inv.AssetId = asset?.Id; inv.Asset = asset;
         await db.SaveChangesAsync();
         return Ok(ToDto(inv));
     }
@@ -104,7 +124,10 @@ public class InvestmentsController(AppDbContext db) : BaseController
     }
 
     private static InvestmentDto ToDto(Investment i) =>
-        new(i.Id, i.Name, i.Type, i.Amount, i.Date, i.CreatedAt, i.IsExistingBalance);
+        new(i.Id, i.Name, i.Type, i.Amount, i.Date, i.CreatedAt, i.IsExistingBalance, i.AssetId, i.Asset?.Name);
+
+    private Task<Asset?> FindAsset(int? id) =>
+        id.HasValue ? db.Assets.FirstOrDefaultAsync(a => a.Id == id.Value && a.UserId == UserId) : Task.FromResult<Asset?>(null);
 }
 
 
@@ -299,10 +322,7 @@ public class DashboardController(AppDbContext db, AlertService alerts) : BaseCon
         var cardInvoices = new List<InvoiceSummaryDto>();
         foreach (var c in cards) cardInvoices.Add(await db.CurrentInvoiceAsync(UserId, c));
 
-        var todayDate = InvoiceCalculator.Today();
-        var totalPatrimony = await db.Investments
-            .Where(i => i.UserId == UserId && i.Date <= todayDate)
-            .SumAsync(i => (decimal?)i.Amount) ?? 0;
+        var totalPatrimony = await AssetCalculator.TotalPatrimonyAsync(db, UserId);
 
         return Ok(new DashboardDto(budgetDto, catSummaries, trend, unread, goalDtos, cardInvoices, totalPatrimony));
     }

@@ -15,6 +15,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<CreditCard> CreditCards => Set<CreditCard>();
     public DbSet<InvoicePayment> InvoicePayments => Set<InvoicePayment>();
     public DbSet<Income> Incomes => Set<Income>();
+    public DbSet<Asset> Assets => Set<Asset>();
     public DbSet<Investment> Investments => Set<Investment>();
     public DbSet<Goal> Goals => Set<Goal>();
     public DbSet<GoalDeposit> GoalDeposits => Set<GoalDeposit>();
@@ -99,8 +100,20 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         });
 
         // Investimento 
-        mb.Entity<Investment>(e =>
-            e.Property(x => x.Amount).HasColumnType("numeric(18,2)"));
+        mb.Entity<Investment>(e => {
+            e.Property(x => x.Amount).HasColumnType("numeric(18,2)");
+            e.HasOne(x => x.Asset).WithMany().HasForeignKey(x => x.AssetId).OnDelete(DeleteBehavior.Restrict);
+        });
+
+        // Patrimônio
+        mb.Entity<Asset>(e => {
+            e.Property(x => x.InitialValue).HasColumnType("numeric(18,2)");
+            e.Property(x => x.AnnualDepreciationPercent).HasColumnType("numeric(5,2)");
+            e.Property(x => x.Name).HasMaxLength(100);
+            e.Property(x => x.Kind).HasMaxLength(20);
+            e.Property(x => x.Type).HasMaxLength(50);
+            e.HasIndex(x => x.UserId);
+        });
 
         //  Meta 
         mb.Entity<Goal>(e => {
